@@ -9,6 +9,7 @@ final class ProgressStore: ObservableObject {
     @Published private(set) var phraseProgress: [String: PhraseProgress]
     @Published private(set) var bookmarkedPhraseKeys: Set<String>
     @Published private(set) var dailyActivity: [String: DailyActivity]
+    @Published private(set) var savedLessonSessions: [String: SavedLessonSession]
 
     private let defaults: UserDefaults
     private let completedKey = "completedNodeIDs"
@@ -17,6 +18,7 @@ final class ProgressStore: ObservableObject {
     private let phraseProgressKey = "phraseProgress.v2"
     private let bookmarksKey = "bookmarkedPhraseKeys"
     private let dailyActivityKey = "dailyActivity.v2"
+    private let savedLessonsKey = "savedLessonSessions.v1"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -38,6 +40,13 @@ final class ProgressStore: ObservableObject {
         } else {
             dailyActivity = [:]
         }
+
+        if let data = defaults.data(forKey: savedLessonsKey),
+           let decoded = try? JSONDecoder().decode([String: SavedLessonSession].self, from: data) {
+            savedLessonSessions = decoded
+        } else {
+            savedLessonSessions = [:]
+        }
     }
 
     func isCompleted(_ nodeID: String) -> Bool {
@@ -46,6 +55,7 @@ final class ProgressStore: ObservableObject {
 
     func complete(nodeID: String, earnedXP: Int) {
         completedNodeIDs.insert(nodeID)
+        savedLessonSessions.removeValue(forKey: nodeID)
         addXP(earnedXP)
         var today = dailyActivity[todayKey] ?? DailyActivity()
         today.sessions += 1
@@ -53,8 +63,11 @@ final class ProgressStore: ObservableObject {
         persist()
     }
 
-    func recordPracticeSession(earnedXP: Int) {
+    func recordPracticeSession(earnedXP: Int, restoreHeart: Bool = true) {
         addXP(earnedXP)
+        if restoreHeart {
+            hearts = min(5, hearts + 1)
+        }
         var today = dailyActivity[todayKey] ?? DailyActivity()
         today.sessions += 1
         dailyActivity[todayKey] = today
@@ -131,9 +144,43 @@ final class ProgressStore: ObservableObject {
         return hearts
     }
 
+    func gainHeart() {
+        hearts = min(5, hearts + 1)
+        persist()
+    }
+
     func refillHearts() {
         hearts = 5
         persist()
+    }
+
+    @discardableResult
+    func buyHeart(cost: Int = 100) -> Bool {
+        guard hearts < 5, xp >= cost else { return false }
+        xp -= cost
+        hearts += 1
+        persist()
+        return true
+    }
+
+    func savedLessonSession(for nodeID: String) -> SavedLessonSession? {
+        savedLessonSessions[nodeID]
+    }
+
+    func saveLessonSession(_ session: SavedLessonSession) {
+        guard !completedNodeIDs.contains(session.nodeID) else { return }
+        savedLessonSessions[session.nodeID] = session
+        persist()
+    }
+
+    func clearSavedLessonSession(nodeID: String) {
+        guard savedLessonSessions.removeValue(forKey: nodeID) != nil else { return }
+        persist()
+    }
+
+    func lessonProgress(nodeID: String) -> Double {
+        if completedNodeIDs.contains(nodeID) { return 1 }
+        return savedLessonSessions[nodeID]?.progress ?? 0
     }
 
     var todayXP: Int {
@@ -215,6 +262,7 @@ final class ProgressStore: ObservableObject {
         phraseProgress = [:]
         bookmarkedPhraseKeys = []
         dailyActivity = [:]
+        savedLessonSessions = [:]
         persist()
     }
 
@@ -257,6 +305,9 @@ final class ProgressStore: ObservableObject {
         }
         if let data = try? JSONEncoder().encode(dailyActivity) {
             defaults.set(data, forKey: dailyActivityKey)
+        }
+        if let data = try? JSONEncoder().encode(savedLessonSessions) {
+            defaults.set(data, forKey: savedLessonsKey)
         }
     }
 }
