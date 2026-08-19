@@ -3,6 +3,86 @@ import Combine
 
 @MainActor
 final class ProgressStore: ObservableObject {
+    struct LearningAttempt: Codable, Hashable, Identifiable {
+        let id: UUID
+        let timestamp: Date
+        let course: LanguageCourse
+        let phraseID: String
+        let topicID: String
+        let exerciseType: ExerciseType
+        let direction: QuestionDirection
+        let stageBefore: PhraseLearningStage
+        let wasCorrect: Bool
+        let responseTimeSeconds: Double
+        let recallProbabilityBefore: Double
+        let predictedCorrectProbability: Double
+        let correctParts: Int
+        let totalParts: Int
+    }
+
+    private struct LearnerModelState: Codable, Hashable {
+        var weights: [String: Double] = [:]
+        var observations: Int = 0
+        var brierSum: Double = 0
+
+        func predict(features: [String: Double]) -> Double {
+            let score = features.reduce(0.0) { partial, item in
+                partial + item.value * weight(for: item.key)
+            }
+            let clipped = max(-12.0, min(12.0, score))
+            return 1.0 / (1.0 + exp(-clipped))
+        }
+
+        mutating func update(features: [String: Double], outcome: Bool) -> Double {
+            let prediction = predict(features: features)
+            let target = outcome ? 1.0 : 0.0
+            let error = target - prediction
+            let learningRate = max(0.025, 0.16 / sqrt(1.0 + Double(observations) / 40.0))
+
+            for (key, value) in features {
+                let current = weight(for: key)
+                let regularized = current * 0.9998
+                weights[key] = regularized + learningRate * error * value
+            }
+
+            observations += 1
+            brierSum += pow(prediction - target, 2)
+            return prediction
+        }
+
+        private func weight(for key: String) -> Double {
+            weights[key] ?? Self.priorWeight(for: key)
+        }
+
+        private static func priorWeight(for key: String) -> Double {
+            switch key {
+            case "bias": return 0.90
+            case "exercise.multipleChoice": return 0.90
+            case "exercise.matching": return 0.75
+            case "exercise.lemma": return 0.60
+            case "exercise.wordBank": return 0.35
+            case "exercise.fillBlank": return 0.05
+            case "exercise.typing": return -0.55
+            case "exercise.listening": return -0.65
+            case "exercise.speaking": return -0.55
+            case "stage.1": return -0.15
+            case "stage.2": return 0.00
+            case "stage.3": return 0.15
+            case "stage.4": return 0.30
+            case "stage.5": return 0.45
+            case "direction.foreignToEnglish": return 0.25
+            case "direction.englishToForeign": return -0.15
+            case "recall": return 1.50
+            case "accuracy": return 1.00
+            case "length": return -0.70
+            case "seenConfidence": return 0.40
+            case "recentFailure": return -0.80
+            case "hasLemmas": return 0.05
+            default: return 0
+            }
+        }
+    }
+
     @Published private(set) var completedNodeIDs: Set<String>
     @Published private(set) var hearts: Int
     @Published private(set) var xp: Int
@@ -10,7 +90,9 @@ final class ProgressStore: ObservableObject {
     @Published private(set) var bookmarkedPhraseKeys: Set<String>
     @Published private(set) var dailyActivity: [String: DailyActivity]
     @Published private(set) var savedLessonSessions: [String: SavedLessonSession]
+    @Published private(set) var attemptHistory: [LearningAttempt]
 
+    private var learnerModels: [String: LearnerModelState]
     private let defaults: UserDefaults
     private let completedKey = "completedNodeIDs"
     private let heartsKey = "hearts"
@@ -19,9 +101,12 @@ final class ProgressStore: ObservableObject {
     private let bookmarksKey = "bookmarkedPhraseKeys"
     private let dailyActivityKey = "dailyActivity.v2"
     private let savedLessonsKey = "savedLessonSessions.v1"
+    private let attemptHistoryKey = "learningAttempts.v1"
+    private let learnerModelsKey = "adaptiveLearnerModels.v1"
 
     private let minHalfLifeDays = 15.0 / (24.0 * 60.0)
     private let maxHalfLifeDays = 274.0
+    private let maxStoredAttempts = 20_000
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -49,6 +134,20 @@ final class ProgressStore: ObservableObject {
             savedLessonSessions = decoded
         } else {
             savedLessonSessions = [:]
+        }
+
+        if let data = defaults.data(forKey: attemptHistoryKey),
+           let decoded = try? JSONDecoder().decode([LearningAttempt].self, from: data) {
+            attemptHistory = decoded
+        } else {
+            attemptHistory = []
+        }
+
+        if let data = defaults.data(forKey: learnerModelsKey),
+           let decoded = try? JSONDecoder().decode([String: LearnerModelState].self, from: data) {
+            learnerModels = decoded
+        } else {
+            learnerModels = [:]
         }
     }
 
@@ -93,7 +192,11 @@ final class ProgressStore: ObservableObject {
         course: LanguageCourse,
         phrase: PhraseEntry,
         correct: Bool,
-        exerciseType: ExerciseType
+        exerciseType: ExerciseType,
+        direction: QuestionDirection,
+        responseTimeSeconds: TimeInterval,
+        correctParts: Int? = nil,
+        totalParts: Int = 1
     ) {
         let key = phrase.progressKey(course: course)
         var stats = phraseProgress[key] ?? PhraseProgress()
@@ -103,8 +206,44 @@ final class ProgressStore: ObservableObject {
             stats.learningStage = .introduced
         }
 
+        let stageBefore = stats.learningStage
         let probabilityBeforeReview = stats.recallProbability(at: now)
         let previousHalfLife = stats.effectiveHalfLifeDays
+        let features = learnerFeatures(
+            phrase: phrase,
+            exerciseType: exerciseType,
+            direction: direction,
+            stage: stageBefore,
+            stats: stats,
+            at: now
+        )
+        var learner = learnerModels[course.rawValue] ?? LearnerModelState()
+        let predictedProbability = learner.update(features: features, outcome: correct)
+        learnerModels[course.rawValue] = learner
+
+        let safeTotalParts = max(1, totalParts)
+        let resolvedCorrectParts = max(0, min(safeTotalParts, correctParts ?? (correct ? safeTotalParts : 0)))
+        attemptHistory.append(
+            LearningAttempt(
+                id: UUID(),
+                timestamp: now,
+                course: course,
+                phraseID: phrase.id,
+                topicID: phrase.topicID,
+                exerciseType: exerciseType,
+                direction: direction,
+                stageBefore: stageBefore,
+                wasCorrect: correct,
+                responseTimeSeconds: max(0, responseTimeSeconds),
+                recallProbabilityBefore: probabilityBeforeReview,
+                predictedCorrectProbability: predictedProbability,
+                correctParts: resolvedCorrectParts,
+                totalParts: safeTotalParts
+            )
+        )
+        if attemptHistory.count > maxStoredAttempts {
+            attemptHistory.removeFirst(attemptHistory.count - maxStoredAttempts)
+        }
 
         stats.seen += 1
         if correct {
@@ -156,6 +295,34 @@ final class ProgressStore: ObservableObject {
         stats(course: course, phrase: phrase).recallProbability(at: date)
     }
 
+    func adaptiveObservationCount(course: LanguageCourse) -> Int {
+        learnerModels[course.rawValue]?.observations ?? 0
+    }
+
+    func adaptiveMeanBrierScore(course: LanguageCourse) -> Double? {
+        guard let model = learnerModels[course.rawValue], model.observations > 0 else { return nil }
+        return model.brierSum / Double(model.observations)
+    }
+
+    func predictedSuccess(
+        course: LanguageCourse,
+        phrase: PhraseEntry,
+        exerciseType: ExerciseType,
+        direction: QuestionDirection,
+        stage: PhraseLearningStage
+    ) -> Double {
+        let value = stats(course: course, phrase: phrase)
+        let features = learnerFeatures(
+            phrase: phrase,
+            exerciseType: exerciseType,
+            direction: direction,
+            stage: stage,
+            stats: value,
+            at: Date()
+        )
+        return (learnerModels[course.rawValue] ?? LearnerModelState()).predict(features: features)
+    }
+
     func duePhrases(
         course: LanguageCourse,
         from entries: [PhraseEntry],
@@ -170,6 +337,9 @@ final class ProgressStore: ObservableObject {
                 guard !excludedKeys.contains(key) else { return false }
                 let value = stats(course: course, phrase: phrase)
                 guard value.learningStage != .unseen else { return false }
+                // Recognition is deliberately due immediately: the next encounter must be
+                // the mandatory token-construction gate before any unaided production.
+                if value.learningStage == .recognition { return true }
                 return value.recallProbability(at: now) <= threshold || value.lastReviewWasCorrect == false
             }
             .sorted { lhs, rhs in
@@ -341,7 +511,35 @@ final class ProgressStore: ObservableObject {
         bookmarkedPhraseKeys = []
         dailyActivity = [:]
         savedLessonSessions = [:]
+        attemptHistory = []
+        learnerModels = [:]
         persist()
+    }
+
+    private func learnerFeatures(
+        phrase: PhraseEntry,
+        exerciseType: ExerciseType,
+        direction: QuestionDirection,
+        stage: PhraseLearningStage,
+        stats: PhraseProgress,
+        at date: Date
+    ) -> [String: Double] {
+        let tokenCount = max(1, phrase.foreign.split(whereSeparator: { $0.isWhitespace }).count)
+        let accuracyPrior = stats.seen > 0 ? stats.accuracy : 0.65
+        let seenConfidence = min(1.0, log(1.0 + Double(stats.seen)) / log(11.0))
+
+        return [
+            "bias": 1,
+            "exercise.\(exerciseType.rawValue)": 1,
+            "stage.\(stage.rawValue)": 1,
+            "direction.\(direction.rawValue)": 1,
+            "recall": stats.recallProbability(at: date) - 0.5,
+            "accuracy": accuracyPrior - 0.5,
+            "length": min(1.0, Double(tokenCount) / 12.0),
+            "seenConfidence": seenConfidence,
+            "recentFailure": stats.lastReviewWasCorrect == false ? 1 : 0,
+            "hasLemmas": phrase.lemmas.isEmpty ? 0 : 1
+        ]
     }
 
     private func reviewPriority(course: LanguageCourse, phrase: PhraseEntry, at date: Date) -> Double {
@@ -349,7 +547,8 @@ final class ProgressStore: ObservableObject {
         let forgetting = 1.0 - value.recallProbability(at: date)
         let recentFailureBoost = value.lastReviewWasCorrect == false ? 0.55 : 0
         let errorBoost = min(0.35, Double(value.wrong) * 0.035)
-        return forgetting + recentFailureBoost + errorBoost
+        let tokenGateBoost = value.learningStage == .recognition ? 0.90 : 0
+        return forgetting + recentFailureBoost + errorBoost + tokenGateBoost
     }
 
     private func advanceLearningStage(_ stats: inout PhraseProgress, after type: ExerciseType) {
@@ -358,8 +557,15 @@ final class ProgressStore: ObservableObject {
             if stats.learningStage == .unseen { stats.learningStage = .introduced }
         case .multipleChoice, .matching, .lemma:
             if stats.learningStage < .recognition { stats.learningStage = .recognition }
-        case .wordBank, .fillBlank:
-            if stats.learningStage < .assistedRecall { stats.learningStage = .assistedRecall }
+        case .wordBank:
+            // Word construction is a mandatory gate: only a successful token build can
+            // unlock unaided target-language production.
+            if stats.learningStage >= .recognition && stats.learningStage < .assistedRecall {
+                stats.learningStage = .assistedRecall
+            }
+        case .fillBlank:
+            // Cloze is useful practice but cannot substitute for the token-construction gate.
+            break
         case .typing, .listening, .speaking:
             stats.successfulRecallCount = (stats.successfulRecallCount ?? 0) + 1
             if stats.learningStage < .freeRecall {
@@ -379,7 +585,9 @@ final class ProgressStore: ObservableObject {
         case .assistedRecall:
             stats.learningStage = .recognition
         case .freeRecall, .established:
-            stats.learningStage = .assistedRecall
+            // A lapse in unaided recall requires rebuilding the phrase with tokens before
+            // another unaided attempt is permitted.
+            stats.learningStage = .recognition
             stats.successfulRecallCount = max(0, (stats.successfulRecallCount ?? 0) - 1)
         }
     }
@@ -426,6 +634,12 @@ final class ProgressStore: ObservableObject {
         }
         if let data = try? JSONEncoder().encode(savedLessonSessions) {
             defaults.set(data, forKey: savedLessonsKey)
+        }
+        if let data = try? JSONEncoder().encode(attemptHistory) {
+            defaults.set(data, forKey: attemptHistoryKey)
+        }
+        if let data = try? JSONEncoder().encode(learnerModels) {
+            defaults.set(data, forKey: learnerModelsKey)
         }
     }
 }

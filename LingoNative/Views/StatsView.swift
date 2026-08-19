@@ -36,6 +36,7 @@ struct StatsView: View {
                 overviewGrid
                 dailyQuests
                 sevenDayActivity
+                adaptiveLearningCard
                 masteryCard
             }
             .padding(20)
@@ -172,6 +173,49 @@ struct StatsView: View {
         .padding(16)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var adaptiveLearningCard: some View {
+        let observations = progress.adaptiveObservationCount(course: corpus.course)
+        let active = observations >= 60
+        let accent = active ? Color.lingoGreen : Color.lingoPurple
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "brain.head.profile.fill")
+                    .font(.title3)
+                    .foregroundStyle(accent)
+                Text(active ? "ADAPTIVE LEARNER · ACTIVE" : "ADAPTIVE LEARNER · SHADOW MODE")
+                    .font(.caption.weight(.black))
+                    .tracking(0.8)
+                    .foregroundStyle(accent)
+            }
+
+            if active {
+                Text("Learnt from \(observations) answered exercises")
+                    .font(.headline.weight(.black))
+                    .foregroundStyle(Color.lingoInk)
+                Text("It now chooses among exercises your learning stage allows, aiming for about a 78% predicted chance of success while still exploring occasionally.")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.lingoMuted)
+            } else {
+                Text("\(observations) of 60 answers collected")
+                    .font(.headline.weight(.black))
+                    .foregroundStyle(Color.lingoInk)
+                ProgressView(value: Double(observations), total: 60)
+                    .tint(accent)
+                Text("For now it only predicts in the background. At 60 answers it starts helping choose difficulty — never bypassing the learning-stage or token-construction gates.")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.lingoMuted)
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(accent.opacity(0.25), lineWidth: 2)
+        }
     }
 
     private var masteryCard: some View {
