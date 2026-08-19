@@ -21,7 +21,13 @@ struct QuizView: View {
         self.progress = progress
         self.settings = settings
         let savedSession = session.completionNodeID.flatMap { progress.savedLessonSession(for: $0) }
-        _viewModel = StateObject(wrappedValue: QuizViewModel(session: session, savedSession: savedSession))
+        _viewModel = StateObject(
+            wrappedValue: QuizViewModel(
+                session: session,
+                savedSession: savedSession,
+                progressStore: progress
+            )
+        )
     }
 
     var body: some View {
@@ -44,7 +50,7 @@ struct QuizView: View {
                 ContentUnavailableView(
                     "No questions available",
                     systemImage: "questionmark.circle",
-                    description: Text("There aren’t any phrases in this practice pool yet.")
+                    description: Text("There aren’t any learned phrases in this practice pool yet.")
                 )
             }
         }
@@ -125,6 +131,8 @@ struct QuizView: View {
                 questionHeader(question)
 
                 switch question.type {
+                case .introduction:
+                    introductionExercise(question)
                 case .multipleChoice:
                     multipleChoiceExercise(question)
                 case .typing:
@@ -143,7 +151,9 @@ struct QuizView: View {
                     multipleChoiceExercise(question)
                 }
 
-                lemmaHints(question)
+                if question.type != .introduction {
+                    lemmaHints(question)
+                }
                 Spacer(minLength: 90)
             }
             .padding(20)
@@ -161,6 +171,9 @@ struct QuizView: View {
                     .font(.caption.weight(.black))
                     .foregroundStyle(session.course == .french ? Color.lingoBlue : Color.lingoGreen)
                 Spacer()
+                Text(progress.learningStage(course: session.course, phrase: question.phrase).title.uppercased())
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(Color.lingoMuted)
                 Text("\(viewModel.currentIndex + 1) / \(viewModel.questions.count)")
                     .font(.caption.weight(.black))
                     .foregroundStyle(Color.lingoMuted)
@@ -219,29 +232,102 @@ struct QuizView: View {
 
     private func instruction(for question: QuizQuestion) -> String {
         switch question.type {
+        case .introduction: return "Meet this phrase"
         case .multipleChoice:
             return question.direction == .foreignToEnglish ? "What does this mean?" : "Choose the \(session.course.title) translation"
-        case .typing:
-            return question.direction == .foreignToEnglish ? "Type the English meaning" : "Translate into \(session.course.title)"
-        case .wordBank:
-            return "Build the \(session.course.title) sentence"
-        case .fillBlank:
-            return "Fill in the missing word"
-        case .listening:
-            return "Type what you hear"
-        case .speaking:
-            return "Say this in \(session.course.title)"
-        case .matching:
-            return "Tap the matching translation"
-        case .lemma:
-            return "What does this chunk mean?"
+        case .typing: return "Translate into \(session.course.title)"
+        case .wordBank: return "Build the \(session.course.title) sentence"
+        case .fillBlank: return "Fill in the missing word"
+        case .listening: return "Type what you hear"
+        case .speaking: return "Say this in \(session.course.title)"
+        case .matching: return "Tap the matching translation"
+        case .lemma: return "What does this chunk mean?"
         }
     }
 
     private func shouldShowPrompt(_ question: QuizQuestion) -> Bool {
         switch question.type {
-        case .listening: return false
+        case .introduction, .listening: return false
         default: return true
+        }
+    }
+
+    private func introductionExercise(_ question: QuizQuestion) -> some View {
+        VStack(spacing: 18) {
+            HStack(alignment: .bottom, spacing: 12) {
+                RemoteSVGView(url: character(for: question).url)
+                    .frame(width: 92, height: 118)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top) {
+                        Text(question.phrase.foreign)
+                            .font(.title2.weight(.black))
+                            .foregroundStyle(Color.lingoInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Button {
+                            speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
+                        } label: {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(Color.lingoBlue)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Text(question.phrase.english)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(Color.lingoMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.lingoLine, lineWidth: 2)
+                }
+            }
+
+            if !question.phrase.context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Label(question.phrase.context, systemImage: "text.bubble.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.lingoInk)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.lingoBlue.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+
+            if !question.phrase.lemmas.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("USEFUL CHUNKS")
+                        .font(.caption2.weight(.black))
+                        .tracking(1)
+                        .foregroundStyle(Color.lingoMuted)
+                    ForEach(question.phrase.lemmas.prefix(4)) { lemma in
+                        HStack {
+                            Text(lemma.foreign).font(.subheadline.weight(.bold))
+                            Spacer()
+                            Text(lemma.english)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.lingoMuted)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
+                }
+                .padding(14)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+
+            Text("No need to produce it from memory yet. You’ll recognise it first, then build it with word tiles, then write or say it later.")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.lingoMuted)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
         }
     }
 
@@ -315,61 +401,155 @@ struct QuizView: View {
                 .focused($answerFieldFocused)
                 .disabled(viewModel.status != .unanswered)
 
-            Text("Punctuation and capitalisation don’t count against you; accents still do.")
+            Text("Free production only appears after recognition and assisted recall. Punctuation and capitalisation don’t count; accents still do.")
                 .font(.caption)
                 .foregroundStyle(Color.lingoMuted)
         }
     }
 
     private func wordBankExercise(_ question: QuizQuestion) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                Text(viewModel.wordBankAnswer.isEmpty ? "Tap the words below…" : viewModel.wordBankAnswer)
-                    .font(.body.weight(.bold))
-                    .foregroundStyle(viewModel.wordBankAnswer.isEmpty ? Color.lingoMuted : Color.lingoInk)
-                    .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Text("DRAG OR TAP WORDS INTO PLACE")
+                    .font(.caption2.weight(.black))
+                    .tracking(1)
+                    .foregroundStyle(Color.lingoMuted)
+                Spacer()
                 if !viewModel.selectedWordIndices.isEmpty && viewModel.status == .unanswered {
                     Button {
-                        viewModel.clearWordBank()
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                            viewModel.clearWordBank()
+                        }
                     } label: {
-                        Image(systemName: "arrow.counterclockwise")
+                        Label("Reset", systemImage: "arrow.counterclockwise")
+                            .font(.caption.weight(.black))
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(15)
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            ZStack(alignment: .topLeading) {
+                VStack(spacing: 54) {
+                    Divider()
+                    Divider()
+                    Divider()
+                }
+                .padding(.top, 47)
+
+                if viewModel.selectedWordIndices.isEmpty {
+                    Text("Drop words here…")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color.lingoMuted)
+                        .padding(.top, 12)
+                        .padding(.leading, 4)
+                }
+
+                TokenFlowLayout(spacing: 8) {
+                    ForEach(viewModel.selectedWordIndices, id: \.self) { index in
+                        answerToken(question: question, index: index)
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+            .frame(maxWidth: .infinity, minHeight: 170, alignment: .topLeading)
+            .padding(12)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(Color.lingoLine, lineWidth: 2)
             }
+            .dropDestination(for: String.self) { items, _ in
+                guard viewModel.status == .unanswered,
+                      let payload = items.first,
+                      let index = wordIndex(from: payload) else { return false }
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                    viewModel.placeWordAtEnd(index: index)
+                }
+                return true
+            }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 10)], spacing: 10) {
+            TokenFlowLayout(spacing: 8) {
                 ForEach(question.wordBankTokens.indices, id: \.self) { index in
-                    let selected = viewModel.selectedWordIndices.contains(index)
-                    Button {
-                        viewModel.toggleWord(index: index)
-                    } label: {
-                        Text(question.wordBankTokens[index])
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(selected ? Color.lingoMuted : Color.lingoInk)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 10)
-                            .frame(maxWidth: .infinity)
-                            .background(selected ? Color(.systemGray6) : Color.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(selected ? Color.clear : Color.lingoLine, lineWidth: 2)
-                            }
+                    if !viewModel.selectedWordIndices.contains(index) {
+                        bankToken(question: question, index: index)
                     }
-                    .buttonStyle(TactileCardButtonStyle())
-                    .disabled(viewModel.status != .unanswered)
-                    .opacity(selected ? 0.45 : 1)
                 }
             }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .dropDestination(for: String.self) { items, _ in
+                guard viewModel.status == .unanswered,
+                      let payload = items.first,
+                      let index = wordIndex(from: payload) else { return false }
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                    viewModel.returnWordToBank(index: index)
+                }
+                return true
+            }
+
+            Text("You can drag tiles into the sentence, drag them back to the bank, or drag one tile onto another to reorder. Tapping works too.")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.lingoMuted)
         }
+    }
+
+    private func bankToken(question: QuizQuestion, index: Int) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                viewModel.placeWordAtEnd(index: index)
+            }
+        } label: {
+            tokenLabel(question.wordBankTokens[index], selected: false)
+        }
+        .buttonStyle(TactileCardButtonStyle())
+        .disabled(viewModel.status != .unanswered)
+        .draggable(wordPayload(index))
+    }
+
+    private func answerToken(question: QuizQuestion, index: Int) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                viewModel.returnWordToBank(index: index)
+            }
+        } label: {
+            tokenLabel(question.wordBankTokens[index], selected: true)
+        }
+        .buttonStyle(TactileCardButtonStyle())
+        .disabled(viewModel.status != .unanswered)
+        .draggable(wordPayload(index))
+        .dropDestination(for: String.self) { items, _ in
+            guard viewModel.status == .unanswered,
+                  let payload = items.first,
+                  let draggedIndex = wordIndex(from: payload) else { return false }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                viewModel.moveWord(index: draggedIndex, before: index)
+            }
+            return true
+        }
+    }
+
+    private func tokenLabel(_ text: String, selected: Bool) -> some View {
+        Text(text)
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(Color.lingoInk)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 10)
+            .background(selected ? Color.lingoBlue.opacity(0.10) : Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(selected ? Color.lingoBlue : Color.lingoLine, lineWidth: 2)
+            }
+    }
+
+    private func wordPayload(_ index: Int) -> String { "lingo-word:\(index)" }
+
+    private func wordIndex(from payload: String) -> Int? {
+        guard payload.hasPrefix("lingo-word:") else { return nil }
+        return Int(payload.dropFirst("lingo-word:".count))
     }
 
     private func fillBlankExercise(_ question: QuizQuestion) -> some View {
@@ -517,10 +697,8 @@ struct QuizView: View {
 
         let border: Color = {
             switch viewModel.status {
-            case .unanswered:
-                return selected ? Color.lingoBlue : Color.lingoLine
-            case .correct:
-                return isCorrect ? Color.lingoCorrect : Color.lingoLine
+            case .unanswered: return selected ? Color.lingoBlue : Color.lingoLine
+            case .correct: return isCorrect ? Color.lingoCorrect : Color.lingoLine
             case .wrong:
                 if selected { return .lingoWrong }
                 if isCorrect { return .lingoCorrect }
@@ -569,9 +747,11 @@ struct QuizView: View {
                         .frame(width: 50, height: 50)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Nicely done!")
+                        Text(question.type == .introduction ? "Phrase introduced!" : "Nicely done!")
                             .font(.headline.weight(.black))
-                        Text("That one’s in the bag.")
+                        Text(question.type == .introduction
+                             ? "Recognition comes next — not free writing."
+                             : "Your retention estimate has been updated.")
                             .font(.caption.weight(.bold))
                     }
                     Spacer()
@@ -590,30 +770,29 @@ struct QuizView: View {
                         .frame(width: 50, height: 50)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Try again")
+                        Text("We’ll scaffold it")
                             .font(.headline.weight(.black))
                         Text("Correct answer: \(question.correctAnswer)")
                             .font(.subheadline.weight(.bold))
                             .fixedSize(horizontal: false, vertical: true)
+                        Text("The retry steps down one learning level instead of demanding the same hard answer again.")
+                            .font(.caption.weight(.semibold))
                     }
                     Spacer()
-                    Button {
-                        speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
-                    } label: {
-                        Image(systemName: "speaker.wave.2.fill")
-                            .font(.title3)
-                    }
-                    .buttonStyle(.plain)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .foregroundStyle(Color.lingoWrong)
             }
 
             if viewModel.status == .unanswered {
-                Button("CHECK") {
+                Button(question.type == .introduction ? "GOT IT" : "CHECK") {
                     speechRecognizer.stop()
                     answerFieldFocused = false
-                    viewModel.check(progressStore: progress, settings: settings)
+                    if question.type == .introduction {
+                        viewModel.acknowledgeIntroduction(progressStore: progress)
+                    } else {
+                        viewModel.check(progressStore: progress, settings: settings)
+                    }
                 }
                 .buttonStyle(DuoButtonStyle(
                     fill: viewModel.responseIsReady ? Color.lingoGreen : Color(.systemGray4),
@@ -621,7 +800,7 @@ struct QuizView: View {
                 ))
                 .disabled(!viewModel.responseIsReady)
             } else {
-                Button(viewModel.status == .wrong ? "RETRY LATER" : "NEXT") {
+                Button(viewModel.status == .wrong ? "CONTINUE" : "NEXT") {
                     speechRecognizer.stop()
                     viewModel.continueAfterFeedback(progressStore: progress)
                 }
@@ -635,9 +814,7 @@ struct QuizView: View {
         .padding(.top, 14)
         .padding(.bottom, 10)
         .background(feedbackBackground)
-        .overlay(alignment: .top) {
-            Divider()
-        }
+        .overlay(alignment: .top) { Divider() }
     }
 
     private var feedbackBackground: Color {
@@ -655,7 +832,6 @@ struct QuizView: View {
 
             VStack(spacing: 24) {
                 Spacer()
-
                 RemoteSVGView(url: CloneVisualAsset.finish.url)
                     .frame(width: 150, height: 150)
                     .accessibilityHidden(true)
@@ -665,8 +841,8 @@ struct QuizView: View {
                         .font(.largeTitle.weight(.black))
                         .foregroundStyle(Color.lingoInk)
                     Text(session.completionNodeID == nil
-                         ? "Practice is a safe zone: mistakes cost no hearts, and finishing restores one."
-                         : "Mistakes were recycled into the session, and your exact place was saved along the way.")
+                         ? "HLR review history and learning stages have been updated. Practice is still a safe zone for hearts."
+                         : "New phrases were scaffolded by learning stage, and due older phrases were mixed back in using HLR recall probability.")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.lingoMuted)
                         .multilineTextAlignment(.center)
@@ -678,17 +854,14 @@ struct QuizView: View {
                 }
 
                 if viewModel.mistakes > 0 {
-                    Label("\(viewModel.mistakes) mistake\(viewModel.mistakes == 1 ? "" : "s") recycled", systemImage: "arrow.counterclockwise.circle.fill")
+                    Label("\(viewModel.mistakes) mistake\(viewModel.mistakes == 1 ? "" : "s") rescheduled", systemImage: "brain.head.profile.fill")
                         .font(.subheadline.weight(.black))
                         .foregroundStyle(Color.lingoWrong)
                 }
 
                 Spacer()
-
-                Button("CONTINUE") {
-                    dismiss()
-                }
-                .buttonStyle(DuoButtonStyle())
+                Button("CONTINUE") { dismiss() }
+                    .buttonStyle(DuoButtonStyle())
             }
             .padding(24)
         }
@@ -702,7 +875,6 @@ struct QuizView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 7)
                 .background(tint)
-
             HStack(spacing: 6) {
                 Image(systemName: icon)
                 Text(value)
@@ -723,25 +895,20 @@ struct QuizView: View {
     private var outOfHeartsView: some View {
         VStack(spacing: 20) {
             Spacer()
-
             RemoteSVGView(url: CloneVisualAsset.mascotBad.url)
                 .frame(width: 120, height: 120)
                 .accessibilityHidden(true)
-
             Text("Out of hearts")
                 .font(.largeTitle.weight(.black))
                 .foregroundStyle(Color.lingoInk)
-
             Text("Spend XP for a heart, or use the emergency refill. Practice sessions never cost hearts and restore one when you finish.")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.lingoMuted)
                 .multilineTextAlignment(.center)
 
             if progress.xp >= 100 {
-                Button("SPEND 100 XP · +1 HEART") {
-                    _ = progress.buyHeart()
-                }
-                .buttonStyle(DuoButtonStyle(fill: Color.lingoGold, shadow: Color.lingoOrange))
+                Button("SPEND 100 XP · +1 HEART") { _ = progress.buyHeart() }
+                    .buttonStyle(DuoButtonStyle(fill: Color.lingoGold, shadow: Color.lingoOrange))
             } else {
                 Text("You need \(100 - progress.xp) more XP to buy a heart.")
                     .font(.caption.weight(.bold))
@@ -749,11 +916,8 @@ struct QuizView: View {
             }
 
             Spacer()
-
-            Button("EMERGENCY REFILL") {
-                progress.refillHearts()
-            }
-            .buttonStyle(DuoButtonStyle(fill: .red, shadow: Color(red: 0.72, green: 0.13, blue: 0.16)))
+            Button("EMERGENCY REFILL") { progress.refillHearts() }
+                .buttonStyle(DuoButtonStyle(fill: .red, shadow: Color(red: 0.72, green: 0.13, blue: 0.16)))
         }
         .padding(24)
         .background(Color(.systemGroupedBackground))
@@ -764,11 +928,9 @@ struct QuizView: View {
             RemoteSVGView(url: CloneVisualAsset.mascotSad.url)
                 .frame(width: 100, height: 100)
                 .accessibilityHidden(true)
-
             Text("Wait, don’t go!")
                 .font(.title2.weight(.black))
                 .foregroundStyle(Color.lingoInk)
-
             Text(session.completionNodeID == nil
                  ? "End this practice session?"
                  : "Your exact lesson position is saved, so you can come straight back to it.")
@@ -776,11 +938,8 @@ struct QuizView: View {
                 .foregroundStyle(Color.lingoMuted)
                 .multilineTextAlignment(.center)
 
-            Button("KEEP LEARNING") {
-                showExitConfirmation = false
-            }
-            .buttonStyle(DuoButtonStyle())
-
+            Button("KEEP LEARNING") { showExitConfirmation = false }
+                .buttonStyle(DuoButtonStyle())
             Button("SAVE & EXIT") {
                 speaker.stop()
                 speechRecognizer.stop()
@@ -799,10 +958,7 @@ struct QuizView: View {
     private func recordCompletionIfNeeded() {
         guard !didRecordCompletion else { return }
         didRecordCompletion = true
-
-        if settings.soundEffectsEnabled {
-            soundPlayer.playCompletion()
-        }
+        if settings.soundEffectsEnabled { soundPlayer.playCompletion() }
 
         if let nodeID = session.completionNodeID {
             progress.complete(nodeID: nodeID, earnedXP: viewModel.earnedXP)
@@ -812,17 +968,50 @@ struct QuizView: View {
     }
 }
 
-private enum AppLessonCharacter: String, CaseIterable {
-    case girl
-    case boy
-    case woman
-    case man
-    case robot
-    case zombie
+private struct TokenFlowLayout: Layout {
+    var spacing: CGFloat = 8
 
-    var url: URL {
-        cloneAssetURL("\(rawValue).svg")
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 320
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: width, height: y + rowHeight)
     }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+private enum AppLessonCharacter: String, CaseIterable {
+    case girl, boy, woman, man, robot, zombie
+    var url: URL { cloneAssetURL("\(rawValue).svg") }
 }
 
 private enum CloneVisualAsset: String {
@@ -830,7 +1019,6 @@ private enum CloneVisualAsset: String {
     case mascotBad = "mascot_bad.svg"
     case mascotSad = "mascot_sad.svg"
     case finish = "finish.svg"
-
     var url: URL { cloneAssetURL(rawValue) }
 }
 
@@ -841,10 +1029,7 @@ private func cloneAssetURL(_ filename: String) -> URL {
 private struct RemoteSVGView: UIViewRepresentable {
     let url: URL
 
-    final class Coordinator {
-        var loadedURL: URL?
-    }
-
+    final class Coordinator { var loadedURL: URL? }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -885,21 +1070,10 @@ private final class FeedbackSoundPlayer: ObservableObject {
         try? engine.start()
     }
 
-    deinit {
-        engine.stop()
-    }
-
-    func playCorrect() {
-        playTone(frequency: 880, duration: 0.12, amplitude: 0.16)
-    }
-
-    func playWrong() {
-        playTone(frequency: 220, duration: 0.18, amplitude: 0.14)
-    }
-
-    func playCompletion() {
-        playTone(frequency: 1_046.5, duration: 0.32, amplitude: 0.17)
-    }
+    deinit { engine.stop() }
+    func playCorrect() { playTone(frequency: 880, duration: 0.12, amplitude: 0.16) }
+    func playWrong() { playTone(frequency: 220, duration: 0.18, amplitude: 0.14) }
+    func playCompletion() { playTone(frequency: 1_046.5, duration: 0.32, amplitude: 0.17) }
 
     private func playTone(frequency: Double, duration: Double, amplitude: Float) {
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
@@ -914,9 +1088,7 @@ private final class FeedbackSoundPlayer: ObservableObject {
             channel[frame] = amplitude * Float(max(0, fade)) * sin(Float(2 * Double.pi * frequency * t))
         }
 
-        if !engine.isRunning {
-            try? engine.start()
-        }
+        if !engine.isRunning { try? engine.start() }
         player.stop()
         player.scheduleBuffer(buffer, at: nil, options: .interrupts)
         player.play()
@@ -927,11 +1099,7 @@ private struct TactileCardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .offset(y: configuration.isPressed ? 3 : 0)
-            .shadow(
-                color: .black.opacity(configuration.isPressed ? 0.05 : 0.10),
-                radius: 0,
-                y: configuration.isPressed ? 1 : 4
-            )
+            .shadow(color: .black.opacity(configuration.isPressed ? 0.05 : 0.10), radius: 0, y: configuration.isPressed ? 1 : 4)
             .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
     }
 }
@@ -948,7 +1116,6 @@ private struct ConfettiParticle: Identifiable {
 
 private struct ConfettiOverlay: View {
     @State private var animate = false
-
     private let particles: [ConfettiParticle] = (0..<90).map { _ in
         ConfettiParticle(
             x: CGFloat.random(in: 0.02...0.98),
@@ -971,16 +1138,11 @@ private struct ConfettiOverlay: View {
                         x: geometry.size.width * particle.x,
                         y: animate ? geometry.size.height + 30 : -30
                     )
-                    .animation(
-                        .easeIn(duration: particle.duration).delay(particle.delay),
-                        value: animate
-                    )
+                    .animation(.easeIn(duration: particle.duration).delay(particle.delay), value: animate)
             }
         }
         .allowsHitTesting(false)
         .ignoresSafeArea()
-        .onAppear {
-            animate = true
-        }
+        .onAppear { animate = true }
     }
 }
