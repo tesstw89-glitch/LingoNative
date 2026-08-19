@@ -191,7 +191,7 @@ struct QuizView: View {
 
     private func characterPrompt(_ question: QuizQuestion) -> some View {
         HStack(alignment: .bottom, spacing: 10) {
-            RemoteSVGView(url: character(for: question).url)
+            PrototypeRiveCharacterView(character: character(for: question))
                 .frame(width: 72, height: 92)
                 .accessibilityHidden(true)
 
@@ -224,9 +224,9 @@ struct QuizView: View {
         }
     }
 
-    private func character(for question: QuizQuestion) -> AppLessonCharacter {
+    private func character(for question: QuizQuestion) -> PrototypeRiveCharacter {
         let total = question.id.uuidString.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        let characters = AppLessonCharacter.allCases
+        let characters = PrototypeRiveCharacter.allCases
         return characters[total % characters.count]
     }
 
@@ -255,7 +255,7 @@ struct QuizView: View {
     private func introductionExercise(_ question: QuizQuestion) -> some View {
         VStack(spacing: 18) {
             HStack(alignment: .bottom, spacing: 12) {
-                RemoteSVGView(url: character(for: question).url)
+                PrototypeRiveCharacterView(character: character(for: question))
                     .frame(width: 92, height: 118)
                     .accessibilityHidden(true)
 
@@ -572,7 +572,7 @@ struct QuizView: View {
 
     private func listeningExercise(_ question: QuizQuestion) -> some View {
         VStack(spacing: 20) {
-            RemoteSVGView(url: character(for: question).url)
+            PrototypeRiveCharacterView(character: character(for: question))
                 .frame(width: 96, height: 120)
                 .accessibilityHidden(true)
 
@@ -743,7 +743,7 @@ struct QuizView: View {
         VStack(spacing: 12) {
             if viewModel.status == .correct {
                 HStack(spacing: 12) {
-                    RemoteSVGView(url: CloneVisualAsset.mascot.url)
+                    PrototypeRiveCharacterView(character: character(for: question))
                         .frame(width: 50, height: 50)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
@@ -766,7 +766,7 @@ struct QuizView: View {
                 .foregroundStyle(Color.lingoGreenDark)
             } else if viewModel.status == .wrong {
                 HStack(alignment: .top, spacing: 12) {
-                    RemoteSVGView(url: CloneVisualAsset.mascotBad.url)
+                    PrototypeRiveCharacterView(character: character(for: question))
                         .frame(width: 50, height: 50)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
@@ -832,7 +832,7 @@ struct QuizView: View {
 
             VStack(spacing: 24) {
                 Spacer()
-                RemoteSVGView(url: CloneVisualAsset.finish.url)
+                PrototypeRiveCharacterView(character: .duo)
                     .frame(width: 150, height: 150)
                     .accessibilityHidden(true)
 
@@ -895,7 +895,7 @@ struct QuizView: View {
     private var outOfHeartsView: some View {
         VStack(spacing: 20) {
             Spacer()
-            RemoteSVGView(url: CloneVisualAsset.mascotBad.url)
+            PrototypeRiveCharacterView(character: .duo)
                 .frame(width: 120, height: 120)
                 .accessibilityHidden(true)
             Text("Out of hearts")
@@ -925,7 +925,7 @@ struct QuizView: View {
 
     private var exitConfirmationView: some View {
         VStack(spacing: 18) {
-            RemoteSVGView(url: CloneVisualAsset.mascotSad.url)
+            PrototypeRiveCharacterView(character: .duo)
                 .frame(width: 100, height: 100)
                 .accessibilityHidden(true)
             Text("Wait, don’t go!")
@@ -1009,32 +1009,23 @@ private struct TokenFlowLayout: Layout {
     }
 }
 
-private enum AppLessonCharacter: String, CaseIterable {
-    case girl, boy, woman, man, robot, zombie
-    var url: URL { cloneAssetURL("\(rawValue).svg") }
+private enum PrototypeRiveCharacter: String, CaseIterable {
+    case duo, girl, man
+
+    var url: URL {
+        URL(string: "https://raw.githubusercontent.com/hewad-mubariz/duolingo-clone/79842df2d95fa710fcac61b149ede7351cb20e8d/assets/rive/\(rawValue).riv")!
+    }
 }
 
-private enum CloneVisualAsset: String {
-    case mascot = "mascot.svg"
-    case mascotBad = "mascot_bad.svg"
-    case mascotSad = "mascot_sad.svg"
-    case finish = "finish.svg"
-    var url: URL { cloneAssetURL(rawValue) }
-}
-
-private func cloneAssetURL(_ filename: String) -> URL {
-    URL(string: "https://raw.githubusercontent.com/sanidhyy/duolingo-clone/268221c205148c07bfb22f9adf3b46bdcd048d9a/public/\(filename)")!
-}
-
-private struct RemoteSVGView: UIViewRepresentable {
-    let url: URL
+private struct PrototypeRiveCharacterView: UIViewRepresentable {
+    let character: PrototypeRiveCharacter
 
     final class Coordinator { var loadedURL: URL? }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.isOpaque = false
         webView.backgroundColor = .clear
@@ -1045,14 +1036,36 @@ private struct RemoteSVGView: UIViewRepresentable {
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
+        let url = character.url
         guard context.coordinator.loadedURL != url else { return }
         context.coordinator.loadedURL = url
+
         let source = url.absoluteString
         let html = """
-        <html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-        <body style="margin:0;background:transparent;overflow:hidden;display:flex;align-items:center;justify-content:center;">
-        <img src="\(source)" style="width:100%;height:100%;object-fit:contain;" />
-        </body></html>
+        <!doctype html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+          <style>
+            html, body { margin:0; width:100%; height:100%; background:transparent; overflow:hidden; }
+            canvas { width:100%; height:100%; display:block; }
+          </style>
+        </head>
+        <body>
+          <canvas id="canvas"></canvas>
+          <script src="https://unpkg.com/@rive-app/webgl2@2.36.0"></script>
+          <script>
+            const canvas = document.getElementById('canvas');
+            const animation = new rive.Rive({
+              src: '\(source)',
+              canvas: canvas,
+              autoplay: true,
+              onLoad: () => animation.resizeDrawingSurfaceToCanvas()
+            });
+            window.addEventListener('resize', () => animation.resizeDrawingSurfaceToCanvas());
+          </script>
+        </body>
+        </html>
         """
         webView.loadHTMLString(html, baseURL: nil)
     }
