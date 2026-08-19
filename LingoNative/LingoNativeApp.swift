@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import UIKit
 
 @main
 struct LingoNativeApp: App {
@@ -7,6 +8,10 @@ struct LingoNativeApp: App {
     @StateObject private var settings: SettingsStore
 
     init() {
+        let inputTextColor = UIColor(red: 0.24, green: 0.27, blue: 0.29, alpha: 1.0)
+        UITextField.appearance().textColor = inputTextColor
+        UITextView.appearance().textColor = inputTextColor
+
         let defaults = UserDefaults.standard
         let resetMarker = "learningEngineReset.2026-08-19.v2"
 
