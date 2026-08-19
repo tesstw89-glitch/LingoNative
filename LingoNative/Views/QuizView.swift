@@ -171,9 +171,6 @@ struct QuizView: View {
                     .font(.caption.weight(.black))
                     .foregroundStyle(session.course == .french ? Color.lingoBlue : Color.lingoGreen)
                 Spacer()
-                Text(progress.learningStage(course: session.course, phrase: question.phrase).title.uppercased())
-                    .font(.caption2.weight(.black))
-                    .foregroundStyle(Color.lingoMuted)
                 Text("\(viewModel.currentIndex + 1) / \(viewModel.questions.count)")
                     .font(.caption.weight(.black))
                     .foregroundStyle(Color.lingoMuted)
@@ -325,12 +322,6 @@ struct QuizView: View {
                 .background(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-
-            Text("Legacy reveal screen — new lessons now start directly with an exercise.")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.lingoMuted)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
         }
     }
 
@@ -389,25 +380,19 @@ struct QuizView: View {
     }
 
     private func typingExercise(_ question: QuizQuestion) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TextField("Type your answer", text: $viewModel.typedAnswer, axis: .vertical)
-                .font(.body.weight(.semibold))
-                .padding(16)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.lingoLine, lineWidth: 2)
-                }
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($answerFieldFocused)
-                .disabled(viewModel.status != .unanswered)
-
-            Text("Free writing only appears after you’ve successfully built and heard this phrase several times.")
-                .font(.caption)
-                .foregroundStyle(Color.lingoMuted)
-        }
+        TextField("Type your answer", text: $viewModel.typedAnswer, axis: .vertical)
+            .font(.body.weight(.semibold))
+            .padding(16)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.lingoLine, lineWidth: 2)
+            }
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .focused($answerFieldFocused)
+            .disabled(viewModel.status != .unanswered)
     }
 
     private func wordBankExercise(_ question: QuizQuestion) -> some View {
@@ -492,10 +477,6 @@ struct QuizView: View {
                 }
                 return true
             }
-
-            Text("You can drag tiles into the sentence, drag them back to the bank, or drag one tile onto another to reorder. Tapping works too.")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.lingoMuted)
         }
     }
 
@@ -608,11 +589,6 @@ struct QuizView: View {
                     .focused($answerFieldFocused)
                     .disabled(viewModel.status != .unanswered)
             } else {
-                Text("No written prompt this time — build exactly what you hear.")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(Color.lingoMuted)
-                    .multilineTextAlignment(.center)
-
                 wordBankExercise(question)
             }
         }
@@ -621,6 +597,36 @@ struct QuizView: View {
 
     private func speakingExercise(_ question: QuizQuestion) -> some View {
         VStack(spacing: 16) {
+            TokenFlowLayout(spacing: 8) {
+                ForEach(Array(question.phrase.foreign.split(whereSeparator: { $0.isWhitespace }).map(String.init).enumerated()), id: \.offset) { _, word in
+                    let recognised = speakingWordIsRecognised(word)
+                    Text(word)
+                        .font(.headline.weight(.black))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(recognised ? Color.lingoGreen : Color.white.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.lingoPurple.opacity(0.96))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+            if speechRecognizer.isRecording {
+                Label("Listening…", systemImage: "waveform")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Color.lingoPurple)
+            }
+
+            if let error = speechRecognizer.errorMessage {
+                Text(error)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.lingoWrong)
+                    .multilineTextAlignment(.center)
+            }
+
             Button {
                 if speechRecognizer.isRecording {
                     speechRecognizer.stop()
@@ -630,48 +636,46 @@ struct QuizView: View {
                     }
                 }
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(speechRecognizer.isRecording ? Color.lingoWrong : Color.lingoPurple)
-                        .frame(width: 104, height: 104)
+                HStack(spacing: 9) {
                     Image(systemName: speechRecognizer.isRecording ? "stop.fill" : "mic.fill")
-                        .font(.system(size: 40, weight: .bold))
-                        .foregroundStyle(.white)
+                    Text(speechRecognizer.isRecording ? "STOP" : "SPEAK")
                 }
+                .font(.headline.weight(.black))
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(TactileCardButtonStyle())
+            .buttonStyle(DuoButtonStyle(
+                fill: Color.lingoPurple,
+                shadow: Color.lingoPurple.opacity(0.65)
+            ))
             .disabled(viewModel.status != .unanswered)
 
-            Text(speechRecognizer.isRecording ? "Listening… tap to stop" : "Tap the microphone and speak")
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(Color.lingoMuted)
-
-            TextField("Your speech will appear here", text: $viewModel.typedAnswer, axis: .vertical)
-                .font(.body.weight(.semibold))
-                .padding(16)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.lingoLine, lineWidth: 2)
-                }
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .disabled(viewModel.status != .unanswered)
-
-            if let error = speechRecognizer.errorMessage {
-                Text(error)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.lingoWrong)
-                    .multilineTextAlignment(.center)
-            }
-
-            Button("Hear the target") {
+            Button {
+                speechRecognizer.stop()
                 speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
+            } label: {
+                Label("Hear it", systemImage: "speaker.wave.2.fill")
+                    .font(.subheadline.weight(.black))
+                    .frame(maxWidth: .infinity)
             }
-            .font(.subheadline.weight(.black))
+            .buttonStyle(DuoButtonStyle(
+                fill: Color.lingoBlue,
+                shadow: Color.lingoBlue.opacity(0.65)
+            ))
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func speakingWordIsRecognised(_ word: String) -> Bool {
+        let heard = Set(speechWords(from: viewModel.typedAnswer))
+        let target = speechWords(from: word)
+        return !target.isEmpty && target.allSatisfy { heard.contains($0) }
+    }
+
+    private func speechWords(from text: String) -> [String] {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     @ViewBuilder
@@ -758,14 +762,8 @@ struct QuizView: View {
                     RemoteSVGView(url: CloneVisualAsset.mascot.url)
                         .frame(width: 50, height: 50)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(question.type == .introduction ? "Phrase introduced!" : "Nicely done!")
-                            .font(.headline.weight(.black))
-                        Text(question.type == .introduction
-                             ? "New lessons now skip straight to exercises."
-                             : "Nice — the next encounter can get a little harder.")
-                            .font(.caption.weight(.bold))
-                    }
+                    Text(question.type == .introduction ? "Phrase introduced!" : "Nicely done!")
+                        .font(.headline.weight(.black))
                     Spacer()
                     Button {
                         speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
@@ -782,13 +780,11 @@ struct QuizView: View {
                         .frame(width: 50, height: 50)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("We’ll scaffold it")
+                        Text("Not quite")
                             .font(.headline.weight(.black))
                         Text("Correct answer: \(question.correctAnswer)")
                             .font(.subheadline.weight(.bold))
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("The retry drops back one rung: writing → listen-and-write → audio tokens → visible tokens.")
-                            .font(.caption.weight(.semibold))
                     }
                     Spacer()
                 }
@@ -879,12 +875,12 @@ struct QuizView: View {
 
     private var completionMessage: String {
         if session.completionNodeID != nil {
-            return "New phrases now progress through visible drag-and-drop, audio drag-and-drop, listen-and-write, then free writing."
+            return "Nice work."
         }
         if session.title == PracticeMode.listening.title {
-            return "This open listening drill can pull from the whole corpus without changing the learn-path stage of unseen phrases."
+            return "Listening practice complete."
         }
-        return "Practice history and retention estimates have been updated. Practice is still a safe zone for hearts."
+        return "Practice complete."
     }
 
     private func completionStatCard(title: String, value: String, icon: String, tint: Color) -> some View {
