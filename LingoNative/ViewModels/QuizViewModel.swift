@@ -27,7 +27,8 @@ final class QuizViewModel: ObservableObject {
            let nodeID = session.completionNodeID,
            savedSession.nodeID == nodeID,
            savedSession.course == session.course,
-           !savedSession.questions.isEmpty {
+           !savedSession.questions.isEmpty,
+           !savedSession.questions.contains(where: { $0.type == .introduction }) {
             questions = savedSession.questions
             currentIndex = min(savedSession.currentIndex, savedSession.questions.count)
             selectedAnswer = savedSession.selectedAnswer
@@ -69,8 +70,13 @@ final class QuizViewModel: ObservableObject {
             return true
         case .multipleChoice, .fillBlank, .matching, .lemma:
             return selectedAnswer != nil
-        case .typing, .listening, .speaking:
+        case .typing, .speaking:
             return !typedAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .listening:
+            if question.wordBankTokens.isEmpty {
+                return !typedAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            return !selectedWordIndices.isEmpty
         case .wordBank:
             return !selectedWordIndices.isEmpty
         }
@@ -82,6 +88,10 @@ final class QuizViewModel: ObservableObject {
             guard question.wordBankTokens.indices.contains(index) else { return nil }
             return question.wordBankTokens[index]
         }.joined(separator: " ")
+    }
+
+    private var isOpenCorpusListeningPractice: Bool {
+        Self.isOpenCorpusListeningPractice(session)
     }
 
     func snapshot() -> SavedLessonSession? {
@@ -184,8 +194,10 @@ final class QuizViewModel: ObservableObject {
             response = ""
         case .multipleChoice, .fillBlank, .matching, .lemma:
             response = selectedAnswer ?? ""
-        case .typing, .listening, .speaking:
+        case .typing, .speaking:
             response = typedAnswer
+        case .listening:
+            response = question.wordBankTokens.isEmpty ? typedAnswer : wordBankAnswer
         case .wordBank:
             response = wordBankAnswer
         }
@@ -198,16 +210,24 @@ final class QuizViewModel: ObservableObject {
         )
         let responseTime = max(0.2, Date().timeIntervalSince(questionStartedAt))
 
-        progressStore.recordAttempt(
-            course: session.course,
-            phrase: question.phrase,
-            correct: correct,
-            exerciseType: question.type,
-            direction: question.direction,
-            responseTimeSeconds: responseTime,
-            correctParts: parts.correct,
-            totalParts: parts.total
-        )
+        if !isOpenCorpusListeningPractice {
+            // A listening + token-build question is still a construction attempt for
+            // progression/telemetry, even though its prompt is audio rather than English.
+            let trackedType: ExerciseType = question.type == .listening && !question.wordBankTokens.isEmpty
+                ? .wordBank
+                : question.type
+
+            progressStore.recordAttempt(
+                course: session.course,
+                phrase: question.phrase,
+                correct: correct,
+                exerciseType: trackedType,
+                direction: question.direction,
+                responseTimeSeconds: responseTime,
+                correctParts: parts.correct,
+                totalParts: parts.total
+            )
+        }
 
         if correct {
             correctCount += 1
@@ -227,14 +247,26 @@ final class QuizViewModel: ObservableObject {
         guard let question = currentQuestion else { return }
 
         if status == .wrong {
-            // A miss steps down in difficulty. The retry is generated from the newly
-            // regressed learning stage rather than simply repeating the hard question.
-            let retry = Self.makeQuestionForCurrentStage(
-                phrase: question.phrase,
-                index: questions.count,
-                session: session,
-                progressStore: progressStore
-            )
+            let retry: QuizQuestion
+            if isOpenCorpusListeningPractice {
+                // Open-corpus listening is deliberately independent of the learn-path stage.
+                retry = Self.makeQuestion(
+                    phrase: question.phrase,
+                    type: .listening,
+                    stage: .assistedRecall,
+                    index: questions.count,
+                    phrasePool: session.phrasePool,
+                    allPhrases: session.allPhrases
+                )
+            } else {
+                // A miss steps down one rung and the retry is generated from that easier stage.
+                retry = Self.makeQuestionForCurrentStage(
+                    phrase: question.phrase,
+                    index: questions.count,
+                    session: session,
+                    progressStore: progressStore
+                )
+            }
             questions.append(retry)
         }
 
@@ -253,8 +285,29 @@ final class QuizViewModel: ObservableObject {
         questionStartedAt = Date()
     }
 
+    private static func isOpenCorpusListeningPractice(_ session: QuizSession) -> Bool {
+        session.completionNodeID == nil
+            && session.title == PracticeMode.listening.title
+            && session.exerciseTypes == Set([.listening])
+    }
+
     private static func makeQuestions(session: QuizSession, progressStore: ProgressStore) -> [QuizQuestion] {
         guard !session.phrasePool.isEmpty else { return [] }
+
+        if isOpenCorpusListeningPractice(session) {
+            let selected = Array(session.phrasePool.shuffled().prefix(max(1, min(session.sessionSize, session.phrasePool.count))))
+            return selected.enumerated().map { index, phrase in
+                makeQuestion(
+                    phrase: phrase,
+                    type: .listening,
+                    stage: .assistedRecall,
+                    index: index,
+                    phrasePool: session.phrasePool,
+                    allPhrases: session.allPhrases
+                )
+            }
+        }
+
         let allowed = session.exerciseTypes.isEmpty
             ? Set(ExerciseType.userSelectableCases)
             : session.exerciseTypes.subtracting([.introduction])
@@ -265,7 +318,8 @@ final class QuizViewModel: ObservableObject {
             // take fresh random samples from the same whole unit.
             corePhrases = session.phrasePool.shuffled()
         } else {
-            // Practice is retrieval of learned material, never a back door for surprise new phrases.
+            // General practice remains learned-material retrieval. The dedicated listening,
+            // speaking and lemma-matching drills opt into the whole corpus separately.
             let learned = session.phrasePool.filter {
                 progressStore.learningStage(course: session.course, phrase: $0) != .unseen
             }
@@ -273,40 +327,11 @@ final class QuizViewModel: ObservableObject {
             corePhrases = Array(learned.prefix(max(1, min(session.sessionSize, learned.count))))
         }
 
-        // Build groups, then shuffle the groups. For an unseen phrase the introduction and
-        // its first recognition check stay adjacent, so the learner is taught before being tested.
-        // Importantly, that recognition check is never typing/listening/speaking.
+        // New phrases now start by doing, not by passively revealing the answer.
+        // The learn-path progression is:
+        // English -> drag/build, audio -> drag/build, audio -> write, then free writing.
         var groups: [[QuizQuestion]] = corePhrases.enumerated().map { index, phrase in
-            let stage = progressStore.learningStage(course: session.course, phrase: phrase)
-            if stage == .unseen {
-                let introduction = makeQuestion(
-                    phrase: phrase,
-                    type: .introduction,
-                    stage: .unseen,
-                    index: index,
-                    phrasePool: session.phrasePool,
-                    allPhrases: session.allPhrases
-                )
-                let recognitionType = exerciseType(
-                    for: phrase,
-                    stage: .introduced,
-                    allowed: allowed,
-                    course: session.course,
-                    progressStore: progressStore,
-                    index: index
-                )
-                let recognition = makeQuestion(
-                    phrase: phrase,
-                    type: recognitionType,
-                    stage: .introduced,
-                    index: index,
-                    phrasePool: session.phrasePool,
-                    allPhrases: session.allPhrases
-                )
-                return [introduction, recognition]
-            }
-
-            return [makeQuestionForCurrentStage(
+            [makeQuestionForCurrentStage(
                 phrase: phrase,
                 index: index,
                 session: session,
@@ -316,9 +341,6 @@ final class QuizViewModel: ObservableObject {
         }
 
         if session.completionNodeID != nil {
-            // Interleave a few previously learned phrases. Recognition-stage phrases are
-            // deliberately treated as due so the mandatory drag/token gate appears promptly
-            // in later lessons before those phrases can ever reach free production.
             let excluded = Set(corePhrases.map { $0.progressKey(course: session.course) })
             let reviewPhrases = progressStore.duePhrases(
                 course: session.course,
@@ -358,7 +380,8 @@ final class QuizViewModel: ObservableObject {
             allowed: allowed,
             course: session.course,
             progressStore: progressStore,
-            index: index
+            index: index,
+            isLesson: session.completionNodeID != nil
         )
         return makeQuestion(
             phrase: phrase,
@@ -376,10 +399,9 @@ final class QuizViewModel: ObservableObject {
         allowed: Set<ExerciseType>,
         course: LanguageCourse,
         progressStore: ProgressStore,
-        index: Int
+        index: Int,
+        isLesson: Bool
     ) -> ExerciseType {
-        guard stage != .unseen else { return .introduction }
-
         let tokenCount = tokens(from: phrase.foreign).count
         let hasLemmas = !phrase.lemmas.isEmpty
 
@@ -392,28 +414,49 @@ final class QuizViewModel: ObservableObject {
             }
         }
 
+        if isLesson {
+            // The lesson spine is intentionally fixed. Settings can still shape mixed practice,
+            // but cannot skip the scaffold that protects a genuinely new phrase.
+            switch stage {
+            case .unseen, .introduced:
+                return .wordBank
+            case .recognition:
+                // makeQuestion renders recognition-stage listening as audio + draggable tokens.
+                return .listening
+            case .assistedRecall:
+                // Same exercise type, but now the tokens disappear: listen and write.
+                return .listening
+            case .freeRecall:
+                // Free writing appears only after three successful encounters.
+                return .typing
+            case .established:
+                let core: [ExerciseType] = [.typing, .listening, .wordBank]
+                return adaptiveChoice(
+                    core,
+                    phrase: phrase,
+                    stage: stage,
+                    course: course,
+                    progressStore: progressStore,
+                    index: index
+                ) ?? .typing
+            }
+        }
+
+        // Non-path practice keeps the broader adaptive palette, but passive introduction is gone.
         switch stage {
-        case .unseen:
-            return .introduction
-        case .introduced:
-            // Recognition first. If the user disabled every recognition exercise, multiple
-            // choice remains as the mandatory safety scaffold rather than jumping to production.
-            let candidates = compatible([.multipleChoice, .matching, .lemma])
+        case .unseen, .introduced:
+            let candidates = compatible([.multipleChoice, .matching, .lemma, .wordBank])
             return adaptiveChoice(
-                candidates.isEmpty ? [.multipleChoice] : candidates,
+                candidates.isEmpty ? [.wordBank] : candidates,
                 phrase: phrase,
                 stage: stage,
                 course: course,
                 progressStore: progressStore,
                 index: index
-            ) ?? .multipleChoice
+            ) ?? .wordBank
         case .recognition:
-            // Mandatory construction gate. Settings cannot bypass this: every phrase must be
-            // successfully assembled from target-language tokens before unaided production.
             return .wordBank
         case .assistedRecall:
-            // The token gate has been passed. Now the adaptive learner can choose the right
-            // difficulty among cloze, another token build, typing, listening and speaking.
             let candidates = compatible([.fillBlank, .wordBank, .typing, .listening, .speaking])
             return adaptiveChoice(
                 candidates.isEmpty ? [.wordBank] : candidates,
@@ -426,13 +469,13 @@ final class QuizViewModel: ObservableObject {
         case .freeRecall, .established:
             let candidates = compatible(Array(allowed))
             return adaptiveChoice(
-                candidates.isEmpty ? [.multipleChoice] : candidates,
+                candidates.isEmpty ? [.typing, .listening, .wordBank] : candidates,
                 phrase: phrase,
                 stage: stage,
                 course: course,
                 progressStore: progressStore,
                 index: index
-            ) ?? .multipleChoice
+            ) ?? .typing
         }
     }
 
@@ -504,6 +547,7 @@ final class QuizViewModel: ObservableObject {
     ) -> QuizQuestion {
         switch type {
         case .introduction:
+            // Kept only so old Codable payloads remain decodable. New sessions never generate it.
             return QuizQuestion(
                 type: .introduction,
                 prompt: phrase.foreign,
@@ -559,12 +603,14 @@ final class QuizViewModel: ObservableObject {
             )
 
         case .listening:
+            let isAudioTokenBuild = stage == .recognition
             return QuizQuestion(
                 type: .listening,
                 prompt: phrase.english,
                 correctAnswer: phrase.foreign,
                 direction: .englishToForeign,
-                phrase: phrase
+                phrase: phrase,
+                wordBankTokens: isAudioTokenBuild ? tokens(from: phrase.foreign).shuffled() : []
             )
 
         case .speaking:
@@ -679,7 +725,9 @@ final class QuizViewModel: ObservableObject {
         selectedWordIndices: [Int],
         responseWasCorrect: Bool
     ) -> (correct: Int, total: Int) {
-        guard question.type == .wordBank else {
+        let isTokenBuild = question.type == .wordBank
+            || (question.type == .listening && !question.wordBankTokens.isEmpty)
+        guard isTokenBuild else {
             return (responseWasCorrect ? 1 : 0, 1)
         }
 

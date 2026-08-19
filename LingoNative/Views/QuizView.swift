@@ -50,7 +50,7 @@ struct QuizView: View {
                 ContentUnavailableView(
                     "No questions available",
                     systemImage: "questionmark.circle",
-                    description: Text("There aren’t any learned phrases in this practice pool yet.")
+                    description: Text("There aren’t any phrases in this practice pool yet.")
                 )
             }
         }
@@ -238,7 +238,10 @@ struct QuizView: View {
         case .typing: return "Translate into \(session.course.title)"
         case .wordBank: return "Build the \(session.course.title) sentence"
         case .fillBlank: return "Fill in the missing word"
-        case .listening: return "Type what you hear"
+        case .listening:
+            return question.wordBankTokens.isEmpty
+                ? "Type what you hear"
+                : "Listen, then build the sentence"
         case .speaking: return "Say this in \(session.course.title)"
         case .matching: return "Tap the matching translation"
         case .lemma: return "What does this chunk mean?"
@@ -323,7 +326,7 @@ struct QuizView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
-            Text("No need to produce it from memory yet. You’ll recognise it first, then build it with word tiles, then write or say it later.")
+            Text("Legacy reveal screen — new lessons now start directly with an exercise.")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.lingoMuted)
                 .multilineTextAlignment(.center)
@@ -401,7 +404,7 @@ struct QuizView: View {
                 .focused($answerFieldFocused)
                 .disabled(viewModel.status != .unanswered)
 
-            Text("Free production only appears after recognition and assisted recall. Punctuation and capitalisation don’t count; accents still do.")
+            Text("Free writing only appears after you’ve successfully built and heard this phrase several times.")
                 .font(.caption)
                 .foregroundStyle(Color.lingoMuted)
         }
@@ -590,19 +593,28 @@ struct QuizView: View {
             }
             .buttonStyle(TactileCardButtonStyle())
 
-            TextField("Type what you hear", text: $viewModel.typedAnswer, axis: .vertical)
-                .font(.body.weight(.semibold))
-                .padding(16)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.lingoLine, lineWidth: 2)
-                }
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($answerFieldFocused)
-                .disabled(viewModel.status != .unanswered)
+            if question.wordBankTokens.isEmpty {
+                TextField("Type what you hear", text: $viewModel.typedAnswer, axis: .vertical)
+                    .font(.body.weight(.semibold))
+                    .padding(16)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.lingoLine, lineWidth: 2)
+                    }
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($answerFieldFocused)
+                    .disabled(viewModel.status != .unanswered)
+            } else {
+                Text("No written prompt this time — build exactly what you hear.")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Color.lingoMuted)
+                    .multilineTextAlignment(.center)
+
+                wordBankExercise(question)
+            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -750,8 +762,8 @@ struct QuizView: View {
                         Text(question.type == .introduction ? "Phrase introduced!" : "Nicely done!")
                             .font(.headline.weight(.black))
                         Text(question.type == .introduction
-                             ? "Recognition comes next — not free writing."
-                             : "Your retention estimate has been updated.")
+                             ? "New lessons now skip straight to exercises."
+                             : "Nice — the next encounter can get a little harder.")
                             .font(.caption.weight(.bold))
                     }
                     Spacer()
@@ -775,7 +787,7 @@ struct QuizView: View {
                         Text("Correct answer: \(question.correctAnswer)")
                             .font(.subheadline.weight(.bold))
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("The retry steps down one learning level instead of demanding the same hard answer again.")
+                        Text("The retry drops back one rung: writing → listen-and-write → audio tokens → visible tokens.")
                             .font(.caption.weight(.semibold))
                     }
                     Spacer()
@@ -840,9 +852,7 @@ struct QuizView: View {
                     Text(session.completionNodeID == nil ? "Practice complete!" : "Lesson complete!")
                         .font(.largeTitle.weight(.black))
                         .foregroundStyle(Color.lingoInk)
-                    Text(session.completionNodeID == nil
-                         ? "HLR review history and learning stages have been updated. Practice is still a safe zone for hearts."
-                         : "New phrases were scaffolded by learning stage, and due older phrases were mixed back in using HLR recall probability.")
+                    Text(completionMessage)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.lingoMuted)
                         .multilineTextAlignment(.center)
@@ -865,6 +875,16 @@ struct QuizView: View {
             }
             .padding(24)
         }
+    }
+
+    private var completionMessage: String {
+        if session.completionNodeID != nil {
+            return "New phrases now progress through visible drag-and-drop, audio drag-and-drop, listen-and-write, then free writing."
+        }
+        if session.title == PracticeMode.listening.title {
+            return "This open listening drill can pull from the whole corpus without changing the learn-path stage of unseen phrases."
+        }
+        return "Practice history and retention estimates have been updated. Practice is still a safe zone for hearts."
     }
 
     private func completionStatCard(title: String, value: String, icon: String, tint: Color) -> some View {
