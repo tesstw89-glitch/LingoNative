@@ -135,26 +135,36 @@ struct PracticeHubView: View {
     }
 
     private func phrasePool(for mode: PracticeMode) -> [PhraseEntry] {
+        let learned = corpus.entries.filter {
+            progress.learningStage(course: corpus.course, phrase: $0) != .unseen
+        }
+
         switch mode {
-        case .quick, .typing, .listening, .speaking, .matching:
-            return corpus.entries
+        case .retention:
+            return progress.duePhrases(course: corpus.course, from: corpus.entries, limit: 250)
+        case .quick:
+            return learned.shuffled()
         case .bookmarks:
-            return progress.bookmarkedPhrases(course: corpus.course, from: corpus.entries)
+            return progress.bookmarkedPhrases(course: corpus.course, from: learned)
         case .mistakes:
-            return progress.phrasesWithMistakes(course: corpus.course, from: corpus.entries)
+            return progress.phrasesWithMistakes(course: corpus.course, from: learned)
         case .weak:
-            return progress.weakestPhrases(course: corpus.course, from: corpus.entries)
+            return progress.weakestPhrases(course: corpus.course, from: learned)
+        case .typing, .listening, .speaking:
+            return learned.filter {
+                progress.learningStage(course: corpus.course, phrase: $0) >= .assistedRecall
+            }
+        case .matching:
+            return learned
         case .lemma:
-            return corpus.entries.filter { !$0.lemmas.isEmpty }
+            return learned.filter { !$0.lemmas.isEmpty }
         }
     }
 
     private func makeSession(mode: PracticeMode, pool: [PhraseEntry]) -> QuizSession {
         let types: Set<ExerciseType>
         switch mode {
-        case .quick, .bookmarks:
-            types = settings.enabledExerciseTypes
-        case .mistakes, .weak:
+        case .retention, .quick, .bookmarks, .mistakes, .weak:
             types = settings.enabledExerciseTypes
         case .typing:
             types = [.typing, .wordBank, .fillBlank]
@@ -182,6 +192,7 @@ struct PracticeHubView: View {
 
     private func accent(for mode: PracticeMode) -> Color {
         switch mode {
+        case .retention: return .lingoPurple
         case .quick: return .lingoGreen
         case .bookmarks: return .lingoGold
         case .mistakes: return .lingoOrange
