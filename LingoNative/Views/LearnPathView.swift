@@ -56,15 +56,17 @@ struct LearnPathView: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(Color.lingoMuted)
 
-            HStack(spacing: 8) {
-                ForEach(corpus.topics) { topic in
-                    Label(topic.title, systemImage: topic.icon)
-                        .font(.caption2.weight(.black))
-                        .foregroundStyle(topicAccent(topic.id))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(topicAccent(topic.id).opacity(0.12))
-                        .clipShape(Capsule())
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(corpus.topics) { topic in
+                        Label(topic.title, systemImage: topic.icon)
+                            .font(.caption2.weight(.black))
+                            .foregroundStyle(topicAccent(topic.id))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(topicAccent(topic.id).opacity(0.12))
+                            .clipShape(Capsule())
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
