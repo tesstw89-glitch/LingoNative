@@ -40,7 +40,8 @@ final class SettingsStore: ObservableObject {
             showLemmaHints = payload.showLemmaHints
             dailyGoalXP = payload.dailyGoalXP
             speechRate = payload.speechRate
-            enabledExerciseTypes = payload.enabledExerciseTypes
+            let selectable = payload.enabledExerciseTypes.intersection(Set(ExerciseType.userSelectableCases))
+            enabledExerciseTypes = selectable.isEmpty ? Set(ExerciseType.userSelectableCases) : selectable
         } else {
             sessionLength = 10
             heartsEnabled = true
@@ -50,7 +51,7 @@ final class SettingsStore: ObservableObject {
             showLemmaHints = true
             dailyGoalXP = 50
             speechRate = 0.46
-            enabledExerciseTypes = Set(ExerciseType.allCases)
+            enabledExerciseTypes = Set(ExerciseType.userSelectableCases)
         }
     }
 
@@ -63,11 +64,12 @@ final class SettingsStore: ObservableObject {
         showLemmaHints = true
         dailyGoalXP = 50
         speechRate = 0.46
-        enabledExerciseTypes = Set(ExerciseType.allCases)
+        enabledExerciseTypes = Set(ExerciseType.userSelectableCases)
         save()
     }
 
     func toggleExercise(_ type: ExerciseType) {
+        guard type != .introduction else { return }
         if enabledExerciseTypes.contains(type) {
             guard enabledExerciseTypes.count > 1 else { return }
             enabledExerciseTypes.remove(type)

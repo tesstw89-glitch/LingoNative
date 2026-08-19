@@ -85,6 +85,14 @@ struct LearningUnit: Identifiable, Hashable {
             )
         }
     }
+
+    func phrases(for node: LessonNode) -> [PhraseEntry] {
+        guard !phrases.isEmpty else { return [] }
+        let start = node.index * max(1, node.sessionSize)
+        guard start < phrases.count else { return [] }
+        let end = min(phrases.count, start + max(1, node.sessionSize))
+        return Array(phrases[start..<end])
+    }
 }
 
 struct LessonNode: Identifiable, Hashable {
@@ -108,6 +116,7 @@ enum QuestionDirection: String, Codable, CaseIterable, Equatable {
 }
 
 enum ExerciseType: String, Codable, CaseIterable, Identifiable, Hashable {
+    case introduction
     case multipleChoice
     case typing
     case wordBank
@@ -119,8 +128,13 @@ enum ExerciseType: String, Codable, CaseIterable, Identifiable, Hashable {
 
     var id: String { rawValue }
 
+    static var userSelectableCases: [ExerciseType] {
+        allCases.filter { $0 != .introduction }
+    }
+
     var title: String {
         switch self {
+        case .introduction: return "New phrase"
         case .multipleChoice: return "Multiple choice"
         case .typing: return "Typing"
         case .wordBank: return "Word bank"
@@ -134,6 +148,7 @@ enum ExerciseType: String, Codable, CaseIterable, Identifiable, Hashable {
 
     var systemImage: String {
         switch self {
+        case .introduction: return "sparkles"
         case .multipleChoice: return "checklist"
         case .typing: return "keyboard"
         case .wordBank: return "square.grid.3x3.fill"
@@ -223,16 +238,52 @@ struct QuizSession {
         allPhrases: [PhraseEntry],
         exerciseTypes: Set<ExerciseType>
     ) -> QuizSession {
-        QuizSession(
+        let nodePhrases = unit.phrases(for: node)
+        return QuizSession(
             course: course,
             title: unit.title,
             subtitle: "\(unit.topicTitle) · Lesson \(node.index + 1)",
-            phrasePool: unit.phrases,
+            phrasePool: nodePhrases,
             allPhrases: allPhrases,
-            sessionSize: node.sessionSize,
+            sessionSize: max(1, nodePhrases.count),
             exerciseTypes: exerciseTypes,
             completionNodeID: node.id
         )
+    }
+}
+
+enum PhraseLearningStage: Int, Codable, CaseIterable, Comparable {
+    case unseen = 0
+    case introduced = 1
+    case recognition = 2
+    case assistedRecall = 3
+    case freeRecall = 4
+    case established = 5
+
+    static func < (lhs: PhraseLearningStage, rhs: PhraseLearningStage) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .unseen: return "Unseen"
+        case .introduced: return "Introduced"
+        case .recognition: return "Recognition"
+        case .assistedRecall: return "Assisted recall"
+        case .freeRecall: return "Free recall"
+        case .established: return "Established"
+        }
+    }
+
+    var defaultHalfLifeDays: Double {
+        switch self {
+        case .unseen: return 15.0 / (24.0 * 60.0)
+        case .introduced: return 0.25
+        case .recognition: return 0.75
+        case .assistedRecall: return 2.0
+        case .freeRecall: return 7.0
+        case .established: return 21.0
+        }
     }
 }
 
@@ -242,6 +293,38 @@ struct PhraseProgress: Codable, Hashable {
     var wrong: Int = 0
     var lastPractised: Date?
 
+    // Optional for backwards-compatible decoding of progress saved before staged learning/HLR.
+    var learningStageRaw: Int?
+    var halfLifeDays: Double?
+    var successfulRecallCount: Int?
+    var lastReviewWasCorrect: Bool?
+
+    var learningStage: PhraseLearningStage {
+        get {
+            if let raw = learningStageRaw, let stage = PhraseLearningStage(rawValue: raw) {
+                return stage
+            }
+            // Migrate existing users' historical stats conservatively rather than resetting them to unseen.
+            guard seen > 0 else { return .unseen }
+            if correct >= 6 && accuracy >= 0.82 { return .freeRecall }
+            if correct >= 3 && accuracy >= 0.70 { return .assistedRecall }
+            return .recognition
+        }
+        set { learningStageRaw = newValue.rawValue }
+    }
+
+    var effectiveHalfLifeDays: Double {
+        max(15.0 / (24.0 * 60.0), min(274.0, halfLifeDays ?? learningStage.defaultHalfLifeDays))
+    }
+
+    func recallProbability(at date: Date = Date()) -> Double {
+        guard let lastPractised, learningStage != .unseen else { return 0 }
+        let seconds = max(0, date.timeIntervalSince(lastPractised))
+        let days = seconds / 86_400.0
+        // Duolingo HLR recall equation: p = 2^(-t / h).
+        return max(0.0001, min(0.9999, pow(2.0, -days / effectiveHalfLifeDays)))
+    }
+
     var accuracy: Double {
         guard seen > 0 else { return 0 }
         return Double(correct) / Double(seen)
@@ -250,7 +333,8 @@ struct PhraseProgress: Codable, Hashable {
     var mastery: Double {
         guard seen > 0 else { return 0 }
         let confidence = min(1.0, Double(seen) / 6.0)
-        return accuracy * confidence
+        let stageWeight = Double(learningStage.rawValue) / Double(PhraseLearningStage.established.rawValue)
+        return accuracy * confidence * (0.55 + 0.45 * stageWeight)
     }
 }
 
@@ -262,6 +346,7 @@ struct DailyActivity: Codable, Hashable {
 }
 
 enum PracticeMode: String, CaseIterable, Identifiable {
+    case retention
     case quick
     case bookmarks
     case mistakes
@@ -276,6 +361,7 @@ enum PracticeMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .retention: return "Spaced review"
         case .quick: return "Quick practice"
         case .bookmarks: return "Saved phrases"
         case .mistakes: return "Mistakes"
@@ -290,11 +376,12 @@ enum PracticeMode: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
+        case .retention: return "HLR review: what your memory needs now"
         case .quick: return "A fresh mixed session"
         case .bookmarks: return "Practise your bookmarks"
         case .mistakes: return "Retry phrases you’ve missed"
         case .weak: return "Prioritise your lowest mastery"
-        case .typing: return "No multiple-choice safety net"
+        case .typing: return "Production, once a phrase is ready"
         case .listening: return "Hear it, then write it"
         case .speaking: return "Say the phrase aloud"
         case .matching: return "Fast translation matching"
@@ -304,6 +391,7 @@ enum PracticeMode: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
+        case .retention: return "brain.head.profile.fill"
         case .quick: return "bolt.fill"
         case .bookmarks: return "bookmark.fill"
         case .mistakes: return "arrow.counterclockwise.circle.fill"

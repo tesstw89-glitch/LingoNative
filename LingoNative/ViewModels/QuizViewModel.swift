@@ -15,7 +15,11 @@ final class QuizViewModel: ObservableObject {
     let session: QuizSession
     private let initialQuestionCount: Int
 
-    init(session: QuizSession, savedSession: SavedLessonSession? = nil) {
+    init(
+        session: QuizSession,
+        savedSession: SavedLessonSession? = nil,
+        progressStore: ProgressStore
+    ) {
         self.session = session
 
         if let savedSession,
@@ -33,7 +37,7 @@ final class QuizViewModel: ObservableObject {
             correctCount = savedSession.correctCount
             initialQuestionCount = max(1, savedSession.initialQuestionCount)
         } else {
-            let generated = Self.makeQuestions(session: session)
+            let generated = Self.makeQuestions(session: session, progressStore: progressStore)
             questions = generated
             initialQuestionCount = generated.count
         }
@@ -60,6 +64,8 @@ final class QuizViewModel: ObservableObject {
     var responseIsReady: Bool {
         guard let question = currentQuestion else { return false }
         switch question.type {
+        case .introduction:
+            return true
         case .multipleChoice, .fillBlank, .matching, .lemma:
             return selectedAnswer != nil
         case .typing, .listening, .speaking:
@@ -117,6 +123,34 @@ final class QuizViewModel: ObservableObject {
         }
     }
 
+    func placeWordAtEnd(index: Int) {
+        guard status == .unanswered,
+              let question = currentQuestion,
+              question.wordBankTokens.indices.contains(index) else { return }
+        selectedWordIndices.removeAll { $0 == index }
+        selectedWordIndices.append(index)
+    }
+
+    func moveWord(index: Int, before targetIndex: Int) {
+        guard status == .unanswered,
+              let question = currentQuestion,
+              question.wordBankTokens.indices.contains(index),
+              question.wordBankTokens.indices.contains(targetIndex),
+              index != targetIndex else { return }
+
+        selectedWordIndices.removeAll { $0 == index }
+        guard let destination = selectedWordIndices.firstIndex(of: targetIndex) else {
+            selectedWordIndices.append(index)
+            return
+        }
+        selectedWordIndices.insert(index, at: destination)
+    }
+
+    func returnWordToBank(index: Int) {
+        guard status == .unanswered else { return }
+        selectedWordIndices.removeAll { $0 == index }
+    }
+
     func clearWordBank() {
         guard status == .unanswered else { return }
         selectedWordIndices = []
@@ -127,11 +161,26 @@ final class QuizViewModel: ObservableObject {
         typedAnswer = transcript
     }
 
+    func acknowledgeIntroduction(progressStore: ProgressStore) {
+        guard let question = currentQuestion,
+              question.type == .introduction,
+              status == .unanswered else { return }
+        progressStore.recordExposure(course: session.course, phrase: question.phrase)
+        status = .correct
+        persistSnapshot(to: progressStore)
+    }
+
     func check(progressStore: ProgressStore, settings: SettingsStore) {
         guard let question = currentQuestion, responseIsReady else { return }
+        guard question.type != .introduction else {
+            acknowledgeIntroduction(progressStore: progressStore)
+            return
+        }
 
         let response: String
         switch question.type {
+        case .introduction:
+            response = ""
         case .multipleChoice, .fillBlank, .matching, .lemma:
             response = selectedAnswer ?? ""
         case .typing, .listening, .speaking:
@@ -141,7 +190,12 @@ final class QuizViewModel: ObservableObject {
         }
 
         let correct = Self.answersMatch(response, question.correctAnswer)
-        progressStore.recordAttempt(course: session.course, phrase: question.phrase, correct: correct)
+        progressStore.recordAttempt(
+            course: session.course,
+            phrase: question.phrase,
+            correct: correct,
+            exerciseType: question.type
+        )
 
         if correct {
             correctCount += 1
@@ -161,7 +215,15 @@ final class QuizViewModel: ObservableObject {
         guard let question = currentQuestion else { return }
 
         if status == .wrong {
-            questions.append(Self.retry(of: question))
+            // A miss steps down in difficulty. The retry is generated from the newly
+            // regressed learning stage rather than simply repeating the hard question.
+            let retry = Self.makeQuestionForCurrentStage(
+                phrase: question.phrase,
+                index: questions.count,
+                session: session,
+                progressStore: progressStore
+            )
+            questions.append(retry)
         }
 
         if status != .unanswered {
@@ -178,60 +240,173 @@ final class QuizViewModel: ObservableObject {
         status = .unanswered
     }
 
-    private static func retry(of question: QuizQuestion) -> QuizQuestion {
-        QuizQuestion(
-            type: question.type,
-            prompt: question.prompt,
-            options: question.options.shuffled(),
-            correctAnswer: question.correctAnswer,
-            direction: question.direction,
-            phrase: question.phrase,
-            wordBankTokens: question.wordBankTokens.shuffled(),
-            blankedText: question.blankedText
+    private static func makeQuestions(session: QuizSession, progressStore: ProgressStore) -> [QuizQuestion] {
+        guard !session.phrasePool.isEmpty else { return [] }
+        let allowed = session.exerciseTypes.isEmpty
+            ? Set(ExerciseType.userSelectableCases)
+            : session.exerciseTypes.subtracting([.introduction])
+
+        let corePhrases: [PhraseEntry]
+        if session.completionNodeID != nil {
+            // A lesson node owns its stable tranche of phrases. Lesson 1/2/3 no longer
+            // take fresh random samples from the same whole unit.
+            corePhrases = session.phrasePool.shuffled()
+        } else {
+            // Practice is retrieval of learned material, never a back door for surprise new phrases.
+            let learned = session.phrasePool.filter {
+                progressStore.learningStage(course: session.course, phrase: $0) != .unseen
+            }
+            guard !learned.isEmpty else { return [] }
+            corePhrases = Array(learned.prefix(max(1, min(session.sessionSize, learned.count))))
+        }
+
+        // Build groups, then shuffle the groups. For an unseen phrase the introduction and
+        // its first recognition check stay adjacent, so the learner is taught before being tested.
+        // Importantly, that recognition check is never typing/listening/speaking.
+        var groups: [[QuizQuestion]] = corePhrases.enumerated().map { index, phrase in
+            let stage = progressStore.learningStage(course: session.course, phrase: phrase)
+            if stage == .unseen {
+                let introduction = makeQuestion(
+                    phrase: phrase,
+                    type: .introduction,
+                    stage: .unseen,
+                    index: index,
+                    phrasePool: session.phrasePool,
+                    allPhrases: session.allPhrases
+                )
+                let recognitionType = exerciseType(for: phrase, stage: .introduced, allowed: allowed)
+                let recognition = makeQuestion(
+                    phrase: phrase,
+                    type: recognitionType,
+                    stage: .introduced,
+                    index: index,
+                    phrasePool: session.phrasePool,
+                    allPhrases: session.allPhrases
+                )
+                return [introduction, recognition]
+            }
+
+            return [makeQuestionForCurrentStage(
+                phrase: phrase,
+                index: index,
+                session: session,
+                progressStore: progressStore,
+                allowedOverride: allowed
+            )]
+        }
+
+        if session.completionNodeID != nil {
+            // Interleave a few previously learned phrases whose HLR recall probability has
+            // decayed. Unseen/future material is excluded by duePhrases().
+            let excluded = Set(corePhrases.map { $0.progressKey(course: session.course) })
+            let reviewPhrases = progressStore.duePhrases(
+                course: session.course,
+                from: session.allPhrases,
+                excluding: excluded,
+                limit: 3,
+                threshold: 0.86
+            )
+            for (offset, phrase) in reviewPhrases.enumerated() {
+                groups.append([makeQuestionForCurrentStage(
+                    phrase: phrase,
+                    index: corePhrases.count + offset,
+                    session: session,
+                    progressStore: progressStore,
+                    allowedOverride: allowed
+                )])
+            }
+        }
+
+        return groups.shuffled().flatMap { $0 }
+    }
+
+    private static func makeQuestionForCurrentStage(
+        phrase: PhraseEntry,
+        index: Int,
+        session: QuizSession,
+        progressStore: ProgressStore,
+        allowedOverride: Set<ExerciseType>? = nil
+    ) -> QuizQuestion {
+        let stage = progressStore.learningStage(course: session.course, phrase: phrase)
+        let allowed = allowedOverride ?? (session.exerciseTypes.isEmpty
+            ? Set(ExerciseType.userSelectableCases)
+            : session.exerciseTypes.subtracting([.introduction]))
+        let type = exerciseType(for: phrase, stage: stage, allowed: allowed)
+        return makeQuestion(
+            phrase: phrase,
+            type: type,
+            stage: stage,
+            index: index,
+            phrasePool: session.phrasePool,
+            allPhrases: session.allPhrases
         )
     }
 
-    private static func makeQuestions(session: QuizSession) -> [QuizQuestion] {
-        guard !session.phrasePool.isEmpty else { return [] }
-        let count = max(1, min(session.sessionSize, session.phrasePool.count))
-        let selectedPhrases = Array(session.phrasePool.shuffled().prefix(count))
-        let allowed = session.exerciseTypes.isEmpty ? Set([ExerciseType.multipleChoice]) : session.exerciseTypes
+    private static func exerciseType(
+        for phrase: PhraseEntry,
+        stage: PhraseLearningStage,
+        allowed: Set<ExerciseType>
+    ) -> ExerciseType {
+        guard stage != .unseen else { return .introduction }
 
-        return selectedPhrases.enumerated().map { index, phrase in
-            let compatible = compatibleTypes(for: phrase, allowed: allowed)
-            let type = compatible.randomElement() ?? .multipleChoice
-            return makeQuestion(
-                phrase: phrase,
-                type: type,
-                index: index,
-                phrasePool: session.phrasePool,
-                allPhrases: session.allPhrases
-            )
-        }
-    }
-
-    private static func compatibleTypes(for phrase: PhraseEntry, allowed: Set<ExerciseType>) -> [ExerciseType] {
-        var types = Array(allowed)
         let tokenCount = tokens(from: phrase.foreign).count
-        if tokenCount < 2 {
-            types.removeAll { $0 == .wordBank || $0 == .fillBlank }
+        let hasLemmas = !phrase.lemmas.isEmpty
+
+        func compatible(_ candidates: [ExerciseType]) -> [ExerciseType] {
+            candidates.filter { type in
+                guard allowed.contains(type) else { return false }
+                if (type == .wordBank || type == .fillBlank) && tokenCount < 2 { return false }
+                if type == .lemma && !hasLemmas { return false }
+                return true
+            }
         }
-        if phrase.lemmas.isEmpty {
-            types.removeAll { $0 == .lemma }
+
+        switch stage {
+        case .unseen:
+            return .introduction
+        case .introduced:
+            // Recognition first. If the user disabled every recognition exercise, multiple
+            // choice remains as the mandatory safety scaffold rather than jumping to production.
+            return compatible([.multipleChoice, .matching, .lemma]).randomElement() ?? .multipleChoice
+        case .recognition:
+            // Assisted production before free writing/speaking.
+            let assisted = compatible([.wordBank, .fillBlank])
+            if let type = assisted.randomElement() { return type }
+            // Single-word phrases have no meaningful sentence bank, so use a gentle fallback.
+            return compatible([.multipleChoice, .matching, .lemma]).randomElement() ?? .multipleChoice
+        case .assistedRecall:
+            // Only now is unaided target-language production permitted.
+            return compatible([.typing, .listening, .speaking]).randomElement()
+                ?? compatible([.wordBank, .fillBlank]).randomElement()
+                ?? .multipleChoice
+        case .freeRecall, .established:
+            let mixed = compatible(Array(allowed))
+            return mixed.randomElement() ?? .multipleChoice
         }
-        return types.isEmpty ? [.multipleChoice] : types
     }
 
     private static func makeQuestion(
         phrase: PhraseEntry,
         type: ExerciseType,
+        stage: PhraseLearningStage,
         index: Int,
         phrasePool: [PhraseEntry],
         allPhrases: [PhraseEntry]
     ) -> QuizQuestion {
         switch type {
+        case .introduction:
+            return QuizQuestion(
+                type: .introduction,
+                prompt: phrase.foreign,
+                correctAnswer: phrase.foreign,
+                direction: .foreignToEnglish,
+                phrase: phrase
+            )
+
         case .multipleChoice:
-            let direction: QuestionDirection = index.isMultiple(of: 2) ? .foreignToEnglish : .englishToForeign
+            let direction: QuestionDirection = stage <= .recognition
+                ? .foreignToEnglish
+                : (index.isMultiple(of: 2) ? .foreignToEnglish : .englishToForeign)
             let correct = answerText(for: phrase, direction: direction)
             let options = answerOptions(correct: correct, direction: direction, phrasePool: phrasePool, allPhrases: allPhrases)
             return QuizQuestion(
@@ -244,12 +419,11 @@ final class QuizViewModel: ObservableObject {
             )
 
         case .typing:
-            let direction: QuestionDirection = Bool.random() ? .englishToForeign : .foreignToEnglish
             return QuizQuestion(
                 type: .typing,
-                prompt: direction == .foreignToEnglish ? phrase.foreign : phrase.english,
-                correctAnswer: answerText(for: phrase, direction: direction),
-                direction: direction,
+                prompt: phrase.english,
+                correctAnswer: phrase.foreign,
+                direction: .englishToForeign,
                 phrase: phrase
             )
 
@@ -294,7 +468,9 @@ final class QuizViewModel: ObservableObject {
             )
 
         case .matching:
-            let direction: QuestionDirection = Bool.random() ? .foreignToEnglish : .englishToForeign
+            let direction: QuestionDirection = stage <= .recognition
+                ? .foreignToEnglish
+                : (Bool.random() ? .foreignToEnglish : .englishToForeign)
             let correct = answerText(for: phrase, direction: direction)
             return QuizQuestion(
                 type: .matching,
@@ -306,7 +482,16 @@ final class QuizViewModel: ObservableObject {
             )
 
         case .lemma:
-            let lemma = phrase.lemmas.randomElement()!
+            guard let lemma = phrase.lemmas.randomElement() else {
+                return makeQuestion(
+                    phrase: phrase,
+                    type: .multipleChoice,
+                    stage: stage,
+                    index: index,
+                    phrasePool: phrasePool,
+                    allPhrases: allPhrases
+                )
+            }
             var candidates = (phrasePool.shuffled() + allPhrases.shuffled())
                 .flatMap(\.lemmas)
                 .map(\.english)
