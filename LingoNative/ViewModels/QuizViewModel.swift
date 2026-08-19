@@ -248,31 +248,56 @@ final class QuizViewModel: ObservableObject {
 
         let corePhrases: [PhraseEntry]
         if session.completionNodeID != nil {
-            // A lesson node owns its stable tranche of phrases. This prevents lesson 1/2/3
-            // from being random samples of the same whole unit.
+            // A lesson node owns its stable tranche of phrases. Lesson 1/2/3 no longer
+            // take fresh random samples from the same whole unit.
             corePhrases = session.phrasePool.shuffled()
         } else {
-            // Practice never silently introduces arbitrary new corpus material.
+            // Practice is retrieval of learned material, never a back door for surprise new phrases.
             let learned = session.phrasePool.filter {
                 progressStore.learningStage(course: session.course, phrase: $0) != .unseen
             }
-            let source = learned.isEmpty ? session.phrasePool : learned
-            corePhrases = Array(source.prefix(max(1, min(session.sessionSize, source.count))))
+            guard !learned.isEmpty else { return [] }
+            corePhrases = Array(learned.prefix(max(1, min(session.sessionSize, learned.count))))
         }
 
-        var planned = corePhrases.enumerated().map { index, phrase in
-            makeQuestionForCurrentStage(
+        // Build groups, then shuffle the groups. For an unseen phrase the introduction and
+        // its first recognition check stay adjacent, so the learner is taught before being tested.
+        // Importantly, that recognition check is never typing/listening/speaking.
+        var groups: [[QuizQuestion]] = corePhrases.enumerated().map { index, phrase in
+            let stage = progressStore.learningStage(course: session.course, phrase: phrase)
+            if stage == .unseen {
+                let introduction = makeQuestion(
+                    phrase: phrase,
+                    type: .introduction,
+                    stage: .unseen,
+                    index: index,
+                    phrasePool: session.phrasePool,
+                    allPhrases: session.allPhrases
+                )
+                let recognitionType = exerciseType(for: phrase, stage: .introduced, allowed: allowed)
+                let recognition = makeQuestion(
+                    phrase: phrase,
+                    type: recognitionType,
+                    stage: .introduced,
+                    index: index,
+                    phrasePool: session.phrasePool,
+                    allPhrases: session.allPhrases
+                )
+                return [introduction, recognition]
+            }
+
+            return [makeQuestionForCurrentStage(
                 phrase: phrase,
                 index: index,
                 session: session,
                 progressStore: progressStore,
                 allowedOverride: allowed
-            )
+            )]
         }
 
         if session.completionNodeID != nil {
-            // Interleave a small number of previously learned phrases whose HLR recall
-            // probability has fallen. New/future phrases are excluded because they are unseen.
+            // Interleave a few previously learned phrases whose HLR recall probability has
+            // decayed. Unseen/future material is excluded by duePhrases().
             let excluded = Set(corePhrases.map { $0.progressKey(course: session.course) })
             let reviewPhrases = progressStore.duePhrases(
                 course: session.course,
@@ -281,19 +306,18 @@ final class QuizViewModel: ObservableObject {
                 limit: 3,
                 threshold: 0.86
             )
-            let reviews = reviewPhrases.enumerated().map { offset, phrase in
-                makeQuestionForCurrentStage(
+            for (offset, phrase) in reviewPhrases.enumerated() {
+                groups.append([makeQuestionForCurrentStage(
                     phrase: phrase,
-                    index: planned.count + offset,
+                    index: corePhrases.count + offset,
                     session: session,
                     progressStore: progressStore,
                     allowedOverride: allowed
-                )
+                )])
             }
-            planned.append(contentsOf: reviews)
         }
 
-        return planned.shuffled()
+        return groups.shuffled().flatMap { $0 }
     }
 
     private static func makeQuestionForCurrentStage(
@@ -341,16 +365,17 @@ final class QuizViewModel: ObservableObject {
         case .unseen:
             return .introduction
         case .introduced:
-            // Recognition first: the learner sees/hears the target and identifies meaning.
+            // Recognition first. If the user disabled every recognition exercise, multiple
+            // choice remains as the mandatory safety scaffold rather than jumping to production.
             return compatible([.multipleChoice, .matching, .lemma]).randomElement() ?? .multipleChoice
         case .recognition:
             // Assisted production before free writing/speaking.
             let assisted = compatible([.wordBank, .fillBlank])
             if let type = assisted.randomElement() { return type }
-            // Single-word phrases have no meaningful sentence bank, so move to a gentle recall task.
-            return compatible([.typing, .listening, .speaking, .multipleChoice]).randomElement() ?? .multipleChoice
+            // Single-word phrases have no meaningful sentence bank, so use a gentle fallback.
+            return compatible([.multipleChoice, .matching, .lemma]).randomElement() ?? .multipleChoice
         case .assistedRecall:
-            // Only now is unaided production permitted.
+            // Only now is unaided target-language production permitted.
             return compatible([.typing, .listening, .speaking]).randomElement()
                 ?? compatible([.wordBank, .fillBlank]).randomElement()
                 ?? .multipleChoice
@@ -394,8 +419,6 @@ final class QuizViewModel: ObservableObject {
             )
 
         case .typing:
-            // Productive typing means target-language recall. Foreign -> English typing remains
-            // available only indirectly through other recognition activities.
             return QuizQuestion(
                 type: .typing,
                 prompt: phrase.english,
@@ -445,7 +468,9 @@ final class QuizViewModel: ObservableObject {
             )
 
         case .matching:
-            let direction: QuestionDirection = stage <= .recognition ? .foreignToEnglish : (Bool.random() ? .foreignToEnglish : .englishToForeign)
+            let direction: QuestionDirection = stage <= .recognition
+                ? .foreignToEnglish
+                : (Bool.random() ? .foreignToEnglish : .englishToForeign)
             let correct = answerText(for: phrase, direction: direction)
             return QuizQuestion(
                 type: .matching,
