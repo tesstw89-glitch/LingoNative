@@ -15,6 +15,7 @@ final class QuizViewModel: ObservableObject {
     let session: QuizSession
     private let initialQuestionCount: Int
     private var questionStartedAt = Date()
+    private static let lessonFlowVersion = 2
 
     private enum LessonScaffoldExercise: CaseIterable {
         case visibleBuild
@@ -34,6 +35,7 @@ final class QuizViewModel: ObservableObject {
            let nodeID = session.completionNodeID,
            savedSession.nodeID == nodeID,
            savedSession.course == session.course,
+           savedSession.flowVersion == Self.lessonFlowVersion,
            !savedSession.questions.isEmpty,
            !savedSession.questions.contains(where: { $0.type == .introduction }) {
             questions = savedSession.questions
@@ -106,6 +108,7 @@ final class QuizViewModel: ObservableObject {
         return SavedLessonSession(
             nodeID: nodeID,
             course: session.course,
+            flowVersion: Self.lessonFlowVersion,
             questions: questions,
             currentIndex: currentIndex,
             selectedAnswer: selectedAnswer,
@@ -218,8 +221,6 @@ final class QuizViewModel: ObservableObject {
         let responseTime = max(0.2, Date().timeIntervalSince(questionStartedAt))
 
         if !isOpenCorpusListeningPractice {
-            // Keep audio token-building comparable with visual token construction in the
-            // adaptive telemetry, while the lesson scaffold itself is tracked separately.
             let trackedType: ExerciseType = question.type == .listening && !question.wordBankTokens.isEmpty
                 ? .wordBank
                 : question.type
@@ -277,8 +278,6 @@ final class QuizViewModel: ObservableObject {
                         course: session.course,
                         phrase: question.phrase
                       ) < LessonScaffoldExercise.allCases.count {
-                // Retry the same skill later in the queue. A miss should not suddenly turn
-                // a listening task into a visual build or otherwise expose the answer.
                 retry = Self.makeExactScaffoldRetry(
                     for: question,
                     index: questions.count,
@@ -349,10 +348,6 @@ final class QuizViewModel: ObservableObject {
         }
 
         if session.completionNodeID != nil {
-            // A new phrase must clear the four active scaffold skills before plain writing:
-            // visible build, audio build, listen-and-write, and speaking. Their order is
-            // independently shuffled for every phrase, then the whole lesson is shuffled again
-            // so neither phrases nor exercise types arrive in mechanical blocks.
             var lessonQuestions: [QuizQuestion] = []
             for (index, phrase) in corePhrases.enumerated() {
                 let completed = progressStore.lessonScaffoldSuccessCount(
@@ -573,8 +568,6 @@ final class QuizViewModel: ObservableObject {
         if isLesson {
             switch stage {
             case .unseen, .introduced, .recognition, .assistedRecall, .freeRecall:
-                // The four prerequisite active skills are generated explicitly above. Once
-                // they are complete, plain English -> target writing is the next gate.
                 return .typing
             case .established:
                 let core: [ExerciseType] = [.typing, .listening, .wordBank, .speaking]
