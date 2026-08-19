@@ -1,20 +1,12 @@
 # Attribution
 
-Structural/design inspiration:
+Structural/design inspiration and private prototype visual references:
 
 - sanidhyy/duolingo-clone
 - https://github.com/sanidhyy/duolingo-clone
 - MIT License
 
-The native SwiftUI app no longer uses the clone repository's static lesson character/mascot SVGs at runtime. No React/Next.js source files are included.
-
-Temporary private-prototype character reference:
-
-- hewad-mubariz/duolingo-clone
-- https://github.com/hewad-mubariz/duolingo-clone
-- No repository license declared as of 2026-08-19
-
-For this personal prototype only, LingoNative loads the repository's `duo.riv`, `girl.riv`, and `man.riv` character files remotely from a pinned commit. These are temporary prototype assets and must be replaced before any public distribution, release, or commercial use of LingoNative. The Rive web runtime is used only to render those files inside the existing native `WKWebView` bridge.
+The native SwiftUI app references the clone repository's public SVG character/mascot artwork at a pinned commit for this personal prototype. No React/Next.js source files are included.
 
 Drag-and-drop sentence interaction reference:
 
