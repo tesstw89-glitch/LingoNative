@@ -20,12 +20,12 @@ struct SettingsView: View {
             }
 
             Section("Exercise mix") {
-                ForEach(ExerciseType.allCases) { type in
+                ForEach(ExerciseType.userSelectableCases) { type in
                     Toggle(isOn: binding(for: type)) {
                         Label(type.title, systemImage: type.systemImage)
                     }
                 }
-                Text("At least one exercise type stays enabled. Speaking permission is only requested when a speaking question is actually used.")
+                Text("New phrases are always introduced before testing. These switches control the exercise mix once a phrase is ready for that level of recall.")
                     .font(.caption)
                     .foregroundStyle(Color.lingoMuted)
             }
@@ -67,6 +67,7 @@ struct SettingsView: View {
             Section("Course") {
                 LabeledContent("Current language", value: "\(course.flag) \(course.title)")
                 LabeledContent("Content", value: "Rotating everyday topics")
+                LabeledContent("Retention", value: "HLR spaced review")
                 LabeledContent("Storage", value: "On device")
             }
 
@@ -91,7 +92,7 @@ struct SettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This clears lesson completion, saved lesson position, XP, streaks, phrase mastery, bookmarks and hearts on this device.")
+            Text("This clears lesson completion, saved lesson position, HLR retention history, XP, streaks, phrase mastery, bookmarks and hearts on this device.")
         }
     }
 
