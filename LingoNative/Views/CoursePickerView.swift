@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CoursePickerView: View {
     @ObservedObject var progress: ProgressStore
+    @ObservedObject var settings: SettingsStore
 
     var body: some View {
         ScrollView {
@@ -10,24 +11,27 @@ struct CoursePickerView: View {
                     Text("LINGO NATIVE")
                         .font(.caption.weight(.black))
                         .tracking(1.4)
-                        .foregroundStyle(.lingoGreen)
+                        .foregroundStyle(Color.lingoGreen)
                     Text("What are we practising?")
                         .font(.largeTitle.weight(.black))
-                        .foregroundStyle(.lingoInk)
-                    Text("Opinions & Reactions · prototype course")
+                        .foregroundStyle(Color.lingoInk)
+                    Text("Opinions & Reactions")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.lingoMuted)
+                        .foregroundStyle(Color.lingoMuted)
                 }
 
                 HStack(spacing: 10) {
-                    StatPill(systemImage: "heart.fill", value: "\(progress.hearts)", tint: .red)
-                    StatPill(systemImage: "bolt.fill", value: "\(progress.xp) XP", tint: .lingoGold)
+                    StatPill(systemImage: "flame.fill", value: "\(progress.currentStreak)", tint: Color.lingoOrange)
+                    StatPill(systemImage: "bolt.fill", value: "\(progress.xp) XP", tint: Color.lingoGold)
+                    if settings.heartsEnabled {
+                        StatPill(systemImage: "heart.fill", value: "\(progress.hearts)", tint: .red)
+                    }
                 }
 
                 VStack(spacing: 16) {
                     ForEach(LanguageCourse.allCases) { course in
                         NavigationLink {
-                            LearnPathView(course: course, progress: progress)
+                            CourseHomeView(course: course, progress: progress, settings: settings)
                         } label: {
                             CourseCard(course: course)
                         }
@@ -36,12 +40,12 @@ struct CoursePickerView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("V0.1")
+                    Text("LOCAL-ONLY")
                         .font(.caption.weight(.black))
-                        .foregroundStyle(.lingoMuted)
-                    Text("The lesson path is generated directly from your source headings/contexts. Each tap creates a fresh random session from that unit’s phrase pool.")
+                        .foregroundStyle(Color.lingoMuted)
+                    Text("No account, no server, no subscription. Your course content and progress live on this iPhone.")
                         .font(.footnote.weight(.medium))
-                        .foregroundStyle(.lingoMuted)
+                        .foregroundStyle(Color.lingoMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 8)

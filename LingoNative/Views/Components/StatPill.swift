@@ -12,7 +12,7 @@ struct StatPill: View {
                 .foregroundStyle(tint)
             Text(value)
                 .font(.headline.weight(.black))
-                .foregroundStyle(.lingoInk)
+                .foregroundStyle(Color.lingoInk)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

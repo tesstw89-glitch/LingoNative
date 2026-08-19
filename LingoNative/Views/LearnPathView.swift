@@ -1,77 +1,77 @@
 import SwiftUI
 
 struct LearnPathView: View {
-    let course: LanguageCourse
+    let corpus: Corpus
     @ObservedObject var progress: ProgressStore
-
-    @State private var corpus: Corpus?
-    @State private var loadError: String?
+    @ObservedObject var settings: SettingsStore
 
     var body: some View {
-        Group {
-            if let corpus {
-                ScrollView {
-                    LazyVStack(spacing: 34) {
-                        header(corpus: corpus)
+        ScrollView {
+            LazyVStack(spacing: 34) {
+                header
 
-                        ForEach(Array(corpus.units.enumerated()), id: \.element.id) { index, unit in
-                            UnitSectionView(
-                                unit: unit,
-                                unitIndex: index,
-                                course: course,
-                                allUnits: corpus.units,
-                                allPhrases: corpus.entries,
-                                progress: progress
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 60)
+                ForEach(Array(corpus.units.enumerated()), id: \.element.id) { index, unit in
+                    UnitSectionView(
+                        unit: unit,
+                        unitIndex: index,
+                        course: corpus.course,
+                        allUnits: corpus.units,
+                        allPhrases: corpus.entries,
+                        progress: progress,
+                        settings: settings
+                    )
                 }
-                .background(Color(.systemGroupedBackground))
-            } else if let loadError {
-                ContentUnavailableView(
-                    "Couldn’t load the course",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(loadError)
-                )
-            } else {
-                ProgressView("Building your path…")
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 60)
         }
-        .navigationTitle(course.title)
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Learn")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
-                    Label("\(progress.hearts)", systemImage: "heart.fill")
-                        .foregroundStyle(.red)
+                    if settings.heartsEnabled {
+                        Label("\(progress.hearts)", systemImage: "heart.fill")
+                            .foregroundStyle(.red)
+                    }
                     Label("\(progress.xp)", systemImage: "bolt.fill")
-                        .foregroundStyle(.lingoGold)
+                        .foregroundStyle(Color.lingoGold)
                 }
                 .font(.subheadline.weight(.black))
             }
         }
-        .task {
-            guard corpus == nil else { return }
-            do {
-                corpus = try CorpusLoader.load(course: course)
-            } catch {
-                loadError = error.localizedDescription
-            }
-        }
     }
 
-    private func header(corpus: Corpus) -> some View {
-        VStack(spacing: 8) {
-            Text(course.flag)
+    private var header: some View {
+        VStack(spacing: 12) {
+            Text(corpus.course.flag)
                 .font(.system(size: 48))
             Text("Opinions & Reactions")
                 .font(.title2.weight(.black))
-                .foregroundStyle(.lingoInk)
+                .foregroundStyle(Color.lingoInk)
             Text("\(corpus.entries.count) phrases · \(corpus.units.count) units")
                 .font(.subheadline.weight(.bold))
-                .foregroundStyle(.lingoMuted)
+                .foregroundStyle(Color.lingoMuted)
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    Label("Daily goal", systemImage: "target")
+                        .font(.caption.weight(.black))
+                    Spacer()
+                    Text("\(min(progress.todayXP, settings.dailyGoalXP))/\(settings.dailyGoalXP) XP")
+                        .font(.caption.weight(.black))
+                }
+                ProgressView(value: Double(min(progress.todayXP, settings.dailyGoalXP)), total: Double(max(1, settings.dailyGoalXP)))
+                    .tint(corpus.course == .french ? Color.lingoBlue : Color.lingoGreen)
+            }
+            .padding(14)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.lingoLine, lineWidth: 2)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)

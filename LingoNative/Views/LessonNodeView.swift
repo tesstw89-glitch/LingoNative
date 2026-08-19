@@ -32,7 +32,7 @@ struct LessonNodeView: View {
         .overlay(alignment: .bottomTrailing) {
             Text("\(number)")
                 .font(.caption2.weight(.black))
-                .foregroundStyle(unlocked || completed ? .lingoInk : .lingoMuted)
+                .foregroundStyle(unlocked || completed ? Color.lingoInk : Color.lingoMuted)
                 .frame(width: 26, height: 26)
                 .background(.white)
                 .clipShape(Circle())

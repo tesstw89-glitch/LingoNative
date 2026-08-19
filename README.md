@@ -1,58 +1,59 @@
 # LingoNative
 
-A native SwiftUI iPhone prototype inspired by the learning-path structure of `sanidhyy/duolingo-clone`, rebuilt for the user's French and Spanish everyday-language corpora.
+A native SwiftUI iPhone language-learning app inspired by the interaction model of the open-source Duolingo clone by sanidhyy, rebuilt as a local-first single-user app.
 
-## What is included
+## Current course content
 
-- Native SwiftUI app target (iOS 17+)
-- French / Spanish course picker
-- Opinions & Reactions prototype course
-- Duolingo-style winding learning path
-- Units generated from source headings/contexts
-- Dynamic 10-question sessions drawn from each unit's phrase pool
-- Alternating target-language → English and English → target-language multiple choice
-- Same-unit distractors first, with whole-course fallback
-- Sequential lesson unlocking
-- Hearts and XP
-- Local progress persistence with `UserDefaults`
-- Correct / incorrect haptic feedback
-- 5,150 French phrases and 2,845 Spanish phrases bundled as JSON
+- French — Opinions & Reactions: 5,150 phrases across 333 context units
+- Spanish — Opinions & Reactions: 2,845 phrases across 95 context units
 
-## Open in Xcode
+The bundled phrase corpora are decoded locally from JSON. No account, backend, subscription or remote database is required.
 
-1. Unzip `LingoNative.zip`.
-2. Open `LingoNative.xcodeproj` in Xcode.
-3. Select an iPhone simulator or your iPhone.
-4. In **Signing & Capabilities**, select your Apple Development team if Xcode asks for one.
-5. Run.
+## App structure
 
-The bundle identifier is currently `com.example.LingoNative`; change it in the target settings if installing on a physical device.
+- **Learn** — Duolingo-style winding unit path with sequential lesson unlocking
+- **Practice** — mixed practice, saved phrases, mistakes, weak spots, typing, listening, speaking, matching and lemma/chunk drills
+- **Browse** — full-text phrase/context search, bookmarks, phrase details, audio and phrase history
+- **Stats** — XP, streaks, accuracy, completed lessons, daily quests, seven-day activity and phrase mastery
+- **Settings** — session length, daily XP goal, exercise mix, audio speed, autoplay, hints, haptics, hearts and local reset controls
 
-## Corpus mapping
+## Exercise engine
 
-### French
-Each numbered heading in `opinions_reactions_fr_complete_clean.txt` becomes a Unit. The source wording and order are preserved. French entries do not contain lemma metadata in this source file, so `lemmas` is an empty array.
+Guided lessons and practice sessions can mix:
 
-### Spanish
-Each distinct `context` value in `opinions_reactions_es_madrid_clean_with_headings.json` becomes a Unit. Existing phrase, English, lemma and context data are preserved.
+1. Multiple-choice translation
+2. Free typing
+3. Word-bank sentence building
+4. Fill-the-gap questions
+5. Listening + typing using `AVSpeechSynthesizer`
+6. Speaking/pronunciation using Apple Speech recognition
+7. Translation matching cards
+8. Lemma/chunk questions when lemma metadata is present
 
-### Lesson nodes
-A Unit receives roughly one lesson node per 10 source phrases. A node does **not** permanently own a fixed subset. Opening a node generates a fresh random session from the Unit's phrase pool.
+Exercises and phrases are randomised. Incorrect questions are appended to the end of the current session so they return again before completion.
 
-## Deliberately not in v0.1
+## Local progress
 
-- Login/accounts
-- Cloud sync
-- Stripe/subscriptions
-- Typing exercises
-- Word-bank exercises
-- TTS/listening exercises
-- Lemma popovers
-- Spaced-repetition weighting
-- Admin/editor UI
+`UserDefaults` stores:
 
-Those can be layered on after the native path + quiz loop feels right.
+- completed lesson nodes
+- XP and hearts
+- correct/wrong counts per phrase
+- phrase mastery and last-practised date
+- bookmarks
+- daily activity and streak data
+- app settings
+
+Everything is device-local.
+
+## Run
+
+Open `LingoNative.xcodeproj` in Xcode, choose an iPhone simulator or device, and run the `LingoNative` scheme.
+
+The deployment target is iOS 17+.
+
+Speaking practice requests microphone and speech-recognition permission only when that feature is used.
 
 ## Attribution
 
-The interaction structure was informed by the MIT-licensed `sanidhyy/duolingo-clone` repository. This prototype is a native SwiftUI reimplementation rather than a direct source-code conversion.
+The learning-path concept and visual direction are based on the MIT-licensed `sanidhyy/duolingo-clone`. The SwiftUI implementation and language-data architecture are separate native code written for this project. See `ATTRIBUTION.md`.

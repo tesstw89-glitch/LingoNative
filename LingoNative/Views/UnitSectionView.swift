@@ -7,6 +7,7 @@ struct UnitSectionView: View {
     let allUnits: [LearningUnit]
     let allPhrases: [PhraseEntry]
     @ObservedObject var progress: ProgressStore
+    @ObservedObject var settings: SettingsStore
 
     private let offsets: [CGFloat] = [0, 46, 72, 38, -16, -58, -76, -38]
 
@@ -23,11 +24,15 @@ struct UnitSectionView: View {
                         if unlocked || completed {
                             NavigationLink {
                                 QuizView(
-                                    course: course,
-                                    unit: unit,
-                                    node: node,
-                                    allPhrases: allPhrases,
-                                    progress: progress
+                                    session: .lesson(
+                                        course: course,
+                                        unit: unit,
+                                        node: node,
+                                        allPhrases: allPhrases,
+                                        exerciseTypes: settings.enabledExerciseTypes
+                                    ),
+                                    progress: progress,
+                                    settings: settings
                                 )
                             } label: {
                                 LessonNodeView(number: nodeIndex + 1, completed: completed, unlocked: true)
