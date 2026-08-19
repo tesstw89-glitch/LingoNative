@@ -32,6 +32,7 @@ struct SettingsView: View {
 
             Section("Audio & hints") {
                 Toggle("Auto-play listening questions", isOn: $settings.autoplayAudio)
+                Toggle("Sound effects", isOn: $settings.soundEffectsEnabled)
                 Toggle("Show lemma/chunk hints", isOn: $settings.showLemmaHints)
                 Toggle("Haptic feedback", isOn: $settings.hapticsEnabled)
 
@@ -52,6 +53,13 @@ struct SettingsView: View {
                             progress.refillHearts()
                         }
                         .disabled(progress.hearts == 5)
+                    }
+
+                    if progress.hearts < 5 {
+                        Button("Buy +1 heart for 100 XP") {
+                            _ = progress.buyHeart()
+                        }
+                        .disabled(progress.xp < 100)
                     }
                 }
             }
@@ -83,7 +91,7 @@ struct SettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This clears lesson completion, XP, streaks, phrase mastery, bookmarks and hearts on this device.")
+            Text("This clears lesson completion, saved lesson position, XP, streaks, phrase mastery, bookmarks and hearts on this device.")
         }
     }
 
