@@ -20,6 +20,9 @@ final class ProgressStore: ObservableObject {
     private let dailyActivityKey = "dailyActivity.v2"
     private let savedLessonsKey = "savedLessonSessions.v1"
 
+    private let minHalfLifeDays = 15.0 / (24.0 * 60.0)
+    private let maxHalfLifeDays = 274.0
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         completedNodeIDs = Set(defaults.stringArray(forKey: completedKey) ?? [])
@@ -74,16 +77,61 @@ final class ProgressStore: ObservableObject {
         persist()
     }
 
-    func recordAttempt(course: LanguageCourse, phrase: PhraseEntry, correct: Bool) {
+    func recordExposure(course: LanguageCourse, phrase: PhraseEntry) {
         let key = phrase.progressKey(course: course)
         var stats = phraseProgress[key] ?? PhraseProgress()
-        stats.seen += 1
+        if stats.learningStage == .unseen {
+            stats.learningStage = .introduced
+            stats.halfLifeDays = PhraseLearningStage.introduced.defaultHalfLifeDays
+        }
         stats.lastPractised = Date()
+        phraseProgress[key] = stats
+        persist()
+    }
+
+    func recordAttempt(
+        course: LanguageCourse,
+        phrase: PhraseEntry,
+        correct: Bool,
+        exerciseType: ExerciseType
+    ) {
+        let key = phrase.progressKey(course: course)
+        var stats = phraseProgress[key] ?? PhraseProgress()
+        let now = Date()
+
+        if stats.learningStage == .unseen {
+            stats.learningStage = .introduced
+        }
+
+        let probabilityBeforeReview = stats.recallProbability(at: now)
+        let previousHalfLife = stats.effectiveHalfLifeDays
+
+        stats.seen += 1
         if correct {
             stats.correct += 1
+            advanceLearningStage(&stats, after: exerciseType)
         } else {
             stats.wrong += 1
+            regressLearningStage(&stats)
         }
+        stats.lastReviewWasCorrect = correct
+
+        // Duolingo HLR models recall as p = 2^(-t/h). Their public repository trains
+        // feature weights on a very large trace dataset; LingoNative instead adapts each
+        // phrase's h online from the user's own successes/failures while using that same curve.
+        let adjustedHalfLife: Double
+        if correct {
+            // A correct answer that was unlikely is stronger evidence than an easy immediate repeat.
+            let surprise = 1.0 - probabilityBeforeReview
+            let growth = 1.35 + 1.65 * surprise
+            adjustedHalfLife = previousHalfLife * growth
+        } else {
+            // Failure shortens the interval substantially, then the stage system scaffolds the next test.
+            let retentionFactor = max(0.28, 0.52 - 0.18 * probabilityBeforeReview)
+            adjustedHalfLife = previousHalfLife * retentionFactor
+        }
+        stats.halfLifeDays = min(maxHalfLifeDays, max(minHalfLifeDays, adjustedHalfLife))
+        stats.lastPractised = now
         phraseProgress[key] = stats
 
         var today = dailyActivity[todayKey] ?? DailyActivity()
@@ -98,6 +146,36 @@ final class ProgressStore: ObservableObject {
 
     func stats(course: LanguageCourse, phrase: PhraseEntry) -> PhraseProgress {
         phraseProgress[phrase.progressKey(course: course)] ?? PhraseProgress()
+    }
+
+    func learningStage(course: LanguageCourse, phrase: PhraseEntry) -> PhraseLearningStage {
+        stats(course: course, phrase: phrase).learningStage
+    }
+
+    func recallProbability(course: LanguageCourse, phrase: PhraseEntry, at date: Date = Date()) -> Double {
+        stats(course: course, phrase: phrase).recallProbability(at: date)
+    }
+
+    func duePhrases(
+        course: LanguageCourse,
+        from entries: [PhraseEntry],
+        excluding excludedKeys: Set<String> = [],
+        limit: Int = 30,
+        threshold: Double = 0.86
+    ) -> [PhraseEntry] {
+        let now = Date()
+        return Array(entries
+            .filter { phrase in
+                let key = phrase.progressKey(course: course)
+                guard !excludedKeys.contains(key) else { return false }
+                let value = stats(course: course, phrase: phrase)
+                guard value.learningStage != .unseen else { return false }
+                return value.recallProbability(at: now) <= threshold || value.lastReviewWasCorrect == false
+            }
+            .sorted { lhs, rhs in
+                reviewPriority(course: course, phrase: lhs, at: now) > reviewPriority(course: course, phrase: rhs, at: now)
+            }
+            .prefix(max(0, limit)))
     }
 
     func isBookmarked(course: LanguageCourse, phrase: PhraseEntry) -> Bool {
@@ -130,7 +208,7 @@ final class ProgressStore: ObservableObject {
     }
 
     func weakestPhrases(course: LanguageCourse, from entries: [PhraseEntry], limit: Int = 100) -> [PhraseEntry] {
-        let practised = entries.filter { stats(course: course, phrase: $0).seen > 0 }
+        let practised = entries.filter { stats(course: course, phrase: $0).learningStage != .unseen }
         let source = practised.isEmpty ? entries : practised
         return Array(source.sorted {
             stats(course: course, phrase: $0).mastery < stats(course: course, phrase: $1).mastery
@@ -200,7 +278,7 @@ final class ProgressStore: ObservableObject {
     }
 
     var practisedPhraseCount: Int {
-        phraseProgress.values.filter { $0.seen > 0 }.count
+        phraseProgress.values.filter { $0.learningStage != .unseen }.count
     }
 
     var currentStreak: Int {
@@ -264,6 +342,46 @@ final class ProgressStore: ObservableObject {
         dailyActivity = [:]
         savedLessonSessions = [:]
         persist()
+    }
+
+    private func reviewPriority(course: LanguageCourse, phrase: PhraseEntry, at date: Date) -> Double {
+        let value = stats(course: course, phrase: phrase)
+        let forgetting = 1.0 - value.recallProbability(at: date)
+        let recentFailureBoost = value.lastReviewWasCorrect == false ? 0.55 : 0
+        let errorBoost = min(0.35, Double(value.wrong) * 0.035)
+        return forgetting + recentFailureBoost + errorBoost
+    }
+
+    private func advanceLearningStage(_ stats: inout PhraseProgress, after type: ExerciseType) {
+        switch type {
+        case .introduction:
+            if stats.learningStage == .unseen { stats.learningStage = .introduced }
+        case .multipleChoice, .matching, .lemma:
+            if stats.learningStage < .recognition { stats.learningStage = .recognition }
+        case .wordBank, .fillBlank:
+            if stats.learningStage < .assistedRecall { stats.learningStage = .assistedRecall }
+        case .typing, .listening, .speaking:
+            stats.successfulRecallCount = (stats.successfulRecallCount ?? 0) + 1
+            if stats.learningStage < .freeRecall {
+                stats.learningStage = .freeRecall
+            } else if (stats.successfulRecallCount ?? 0) >= 3 {
+                stats.learningStage = .established
+            }
+        }
+    }
+
+    private func regressLearningStage(_ stats: inout PhraseProgress) {
+        switch stats.learningStage {
+        case .unseen, .introduced:
+            stats.learningStage = .introduced
+        case .recognition:
+            stats.learningStage = .introduced
+        case .assistedRecall:
+            stats.learningStage = .recognition
+        case .freeRecall, .established:
+            stats.learningStage = .assistedRecall
+            stats.successfulRecallCount = max(0, (stats.successfulRecallCount ?? 0) - 1)
+        }
     }
 
     private func addXP(_ amount: Int) {
