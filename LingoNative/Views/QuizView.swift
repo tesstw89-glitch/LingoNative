@@ -191,7 +191,10 @@ struct QuizView: View {
 
     private func characterPrompt(_ question: QuizQuestion) -> some View {
         HStack(alignment: .bottom, spacing: 10) {
-            PrototypeRiveCharacterView(character: character(for: question))
+            PrototypeRiveCharacterView(
+                character: character(for: question),
+                reaction: currentCharacterReaction
+            )
                 .frame(width: 72, height: 92)
                 .accessibilityHidden(true)
 
@@ -230,6 +233,14 @@ struct QuizView: View {
         return characters[total % characters.count]
     }
 
+    private var currentCharacterReaction: PrototypeRiveReaction {
+        switch viewModel.status {
+        case .unanswered: return .idle
+        case .correct: return .correct
+        case .wrong: return .wrong
+        }
+    }
+
     private func instruction(for question: QuizQuestion) -> String {
         switch question.type {
         case .introduction: return "Meet this phrase"
@@ -255,7 +266,10 @@ struct QuizView: View {
     private func introductionExercise(_ question: QuizQuestion) -> some View {
         VStack(spacing: 18) {
             HStack(alignment: .bottom, spacing: 12) {
-                PrototypeRiveCharacterView(character: character(for: question))
+                PrototypeRiveCharacterView(
+                    character: character(for: question),
+                    reaction: currentCharacterReaction
+                )
                     .frame(width: 92, height: 118)
                     .accessibilityHidden(true)
 
@@ -572,7 +586,10 @@ struct QuizView: View {
 
     private func listeningExercise(_ question: QuizQuestion) -> some View {
         VStack(spacing: 20) {
-            PrototypeRiveCharacterView(character: character(for: question))
+            PrototypeRiveCharacterView(
+                character: character(for: question),
+                reaction: currentCharacterReaction
+            )
                 .frame(width: 96, height: 120)
                 .accessibilityHidden(true)
 
@@ -743,7 +760,10 @@ struct QuizView: View {
         VStack(spacing: 12) {
             if viewModel.status == .correct {
                 HStack(spacing: 12) {
-                    PrototypeRiveCharacterView(character: character(for: question))
+                    PrototypeRiveCharacterView(
+                        character: character(for: question),
+                        reaction: .correct
+                    )
                         .frame(width: 50, height: 50)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
@@ -766,7 +786,10 @@ struct QuizView: View {
                 .foregroundStyle(Color.lingoGreenDark)
             } else if viewModel.status == .wrong {
                 HStack(alignment: .top, spacing: 12) {
-                    PrototypeRiveCharacterView(character: character(for: question))
+                    PrototypeRiveCharacterView(
+                        character: character(for: question),
+                        reaction: .wrong
+                    )
                         .frame(width: 50, height: 50)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
@@ -832,7 +855,7 @@ struct QuizView: View {
 
             VStack(spacing: 24) {
                 Spacer()
-                PrototypeRiveCharacterView(character: .duo)
+                PrototypeRiveCharacterView(character: .duo, reaction: .celebration)
                     .frame(width: 150, height: 150)
                     .accessibilityHidden(true)
 
@@ -895,7 +918,7 @@ struct QuizView: View {
     private var outOfHeartsView: some View {
         VStack(spacing: 20) {
             Spacer()
-            PrototypeRiveCharacterView(character: .duo)
+            PrototypeRiveCharacterView(character: .duo, reaction: .wrong)
                 .frame(width: 120, height: 120)
                 .accessibilityHidden(true)
             Text("Out of hearts")
@@ -925,7 +948,7 @@ struct QuizView: View {
 
     private var exitConfirmationView: some View {
         VStack(spacing: 18) {
-            PrototypeRiveCharacterView(character: .duo)
+            PrototypeRiveCharacterView(character: .duo, reaction: .wrong)
                 .frame(width: 100, height: 100)
                 .accessibilityHidden(true)
             Text("Wait, don’t go!")
@@ -1009,18 +1032,56 @@ private struct TokenFlowLayout: Layout {
     }
 }
 
+private enum PrototypeRiveReaction: String {
+    case idle
+    case correct
+    case wrong
+    case celebration
+
+    var cssClass: String { "reaction-\(rawValue)" }
+}
+
 private enum PrototypeRiveCharacter: String, CaseIterable {
     case duo, girl, man
 
     var url: URL {
         URL(string: "https://raw.githubusercontent.com/hewad-mubariz/duolingo-clone/79842df2d95fa710fcac61b149ede7351cb20e8d/assets/rive/\(rawValue).riv")!
     }
+
+    func animationName(for reaction: PrototypeRiveReaction) -> String {
+        switch self {
+        case .man:
+            switch reaction {
+            case .idle: return "Blink"
+            case .correct: return "Thumbs up"
+            case .wrong: return "Blink"
+            case .celebration: return "Jump"
+            }
+        case .duo:
+            switch reaction {
+            case .idle: return "Blink"
+            case .correct: return "Blink"
+            case .wrong: return "Tear jerker"
+            case .celebration: return "Blink"
+            }
+        case .girl:
+            // This file exposes a generic timeline rather than named emotional reactions.
+            // The SwiftUI/Web CSS pop and wobble below still make answer feedback visible.
+            return "Timeline 1"
+        }
+    }
 }
 
 private struct PrototypeRiveCharacterView: UIViewRepresentable {
     let character: PrototypeRiveCharacter
+    let reaction: PrototypeRiveReaction
 
-    final class Coordinator { var loadedURL: URL? }
+    init(character: PrototypeRiveCharacter, reaction: PrototypeRiveReaction = .idle) {
+        self.character = character
+        self.reaction = reaction
+    }
+
+    final class Coordinator { var loadedSignature: String? }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -1037,10 +1098,13 @@ private struct PrototypeRiveCharacterView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {
         let url = character.url
-        guard context.coordinator.loadedURL != url else { return }
-        context.coordinator.loadedURL = url
+        let animationName = character.animationName(for: reaction)
+        let signature = "\(url.absoluteString)#\(animationName)#\(reaction.rawValue)"
+        guard context.coordinator.loadedSignature != signature else { return }
+        context.coordinator.loadedSignature = signature
 
         let source = url.absoluteString
+        let reactionClass = reaction.cssClass
         let html = """
         <!doctype html>
         <html>
@@ -1048,17 +1112,39 @@ private struct PrototypeRiveCharacterView: UIViewRepresentable {
           <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
           <style>
             html, body { margin:0; width:100%; height:100%; background:transparent; overflow:hidden; }
-            canvas { width:100%; height:100%; display:block; }
+            canvas { width:100%; height:100%; display:block; transform-origin:50% 70%; }
+            @keyframes correctPop {
+              0% { transform:scale(.84) translateY(4px); }
+              58% { transform:scale(1.12) translateY(-2px); }
+              100% { transform:scale(1) translateY(0); }
+            }
+            @keyframes wrongWobble {
+              0%,100% { transform:translateX(0) rotate(0deg); }
+              22% { transform:translateX(-5px) rotate(-2deg); }
+              46% { transform:translateX(5px) rotate(2deg); }
+              70% { transform:translateX(-3px) rotate(-1deg); }
+            }
+            @keyframes celebrationBounce {
+              0% { transform:scale(.82) translateY(6px); }
+              38% { transform:scale(1.14) translateY(-7px); }
+              62% { transform:scale(.98) translateY(1px); }
+              82% { transform:scale(1.07) translateY(-3px); }
+              100% { transform:scale(1) translateY(0); }
+            }
+            canvas.reaction-correct { animation:correctPop 520ms cubic-bezier(.2,.9,.25,1); }
+            canvas.reaction-wrong { animation:wrongWobble 430ms ease-in-out; }
+            canvas.reaction-celebration { animation:celebrationBounce 760ms cubic-bezier(.2,.9,.25,1); }
           </style>
         </head>
         <body>
-          <canvas id="canvas"></canvas>
+          <canvas id="canvas" class="\(reactionClass)"></canvas>
           <script src="https://unpkg.com/@rive-app/webgl2@2.36.0"></script>
           <script>
             const canvas = document.getElementById('canvas');
             const animation = new rive.Rive({
               src: '\(source)',
               canvas: canvas,
+              animations: '\(animationName)',
               autoplay: true,
               onLoad: () => animation.resizeDrawingSurfaceToCanvas()
             });
