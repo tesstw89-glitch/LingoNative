@@ -27,6 +27,15 @@
         "french": { "file": "french_places.json", "unitStrategy": "firstSentence" },
         "spanish": { "file": "spanish_places.json", "unitStrategy": "afterEmDash" }
       }
+    },
+    {
+      "id": "getting_around",
+      "title": "Getting Around",
+      "icon": "tram.fill",
+      "resources": {
+        "french": { "file": "french_getting_around.json", "unitStrategy": "beforeColon" },
+        "spanish": { "file": "spanish_getting_around.json", "unitStrategy": "afterEmDash" }
+      }
     }
   ]
 }
