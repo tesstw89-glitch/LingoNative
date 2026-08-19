@@ -24,9 +24,7 @@
 		AD7235C105355032C6BB5D5F /* BrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B2EDB500823AE6C0378DFC /* BrowseView.swift */; };
 		B58F78144BA195B017BDD98C /* UnitSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916CEDA018DDA5456F8B4FA8 /* UnitSectionView.swift */; };
 		BB576BA49B125F1567D8DA83 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 468CC4B04900762115265638 /* SettingsStore.swift */; };
-		BBF808FDC4B5E955888FD541 /* spanish_opinions.json in Resources */ = {isa = PBXBuildFile; fileRef = 36496C3135C215A8BA3DF081 /* spanish_opinions.json */; };
 		C7C5194EC5D46382F681FE48 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C1BBD6693495022252A354 /* SettingsView.swift */; };
-		D3257E25B967AA1559D4B05D /* french_opinions.json in Resources */ = {isa = PBXBuildFile; fileRef = 5AC100AB21EA2EDAC5B7D3F9 /* french_opinions.json */; };
 		E2A22B495454E14B04A46E93 /* SpeechServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18D0D1B3C81921C3F0D5E6C9 /* SpeechServices.swift */; };
 		E542B92179AB228682B2C8EE /* QuizViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16E5D0AE18F04659128657B /* QuizViewModel.swift */; };
 		F0A0D8AC6A18FF891AD529E7 /* DuoButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C842FCBE68C6AA24A6056A7A /* DuoButtonStyle.swift */; };
@@ -40,11 +38,9 @@
 		18D0D1B3C81921C3F0D5E6C9 /* SpeechServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechServices.swift; sourceTree = "<group>"; };
 		239F69F37D707369BCBD79FD /* QuizView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizView.swift; sourceTree = "<group>"; };
 		25972D8916B442012045948B /* CourseHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CourseHomeView.swift; sourceTree = "<group>"; };
-		36496C3135C215A8BA3DF081 /* spanish_opinions.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = spanish_opinions.json; sourceTree = "<group>"; };
 		38A007151ABE87CC01A5B6E9 /* LingoNative.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoNative.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		468CC4B04900762115265638 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		52C1BBD6693495022252A354 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		5AC100AB21EA2EDAC5B7D3F9 /* french_opinions.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = french_opinions.json; sourceTree = "<group>"; };
 		6C36FFE920F24CEDB7CFDBFC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		74A1F9FFFFCFB6867F18AD6F /* PracticeHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeHubView.swift; sourceTree = "<group>"; };
 		86B2EDB500823AE6C0378DFC /* BrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseView.swift; sourceTree = "<group>"; };
@@ -145,8 +141,6 @@
 		A024F06580C79B7582C3806A /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				5AC100AB21EA2EDAC5B7D3F9 /* french_opinions.json */,
-				36496C3135C215A8BA3DF081 /* spanish_opinions.json */,
 				AB12CD34EF56AB78CD90EF12 /* TopicData */,
 			);
 			path = Resources;
@@ -228,8 +222,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D3257E25B967AA1559D4B05D /* french_opinions.json in Resources */,
-				BBF808FDC4B5E955888FD541 /* spanish_opinions.json in Resources */,
 				222F0DBFFE5EB23DCD3FD16F /* Assets.xcassets in Resources */,
 				AA11BB22CC33DD44EE55FF66 /* TopicData in Resources */,
 			);
