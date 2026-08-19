@@ -12,6 +12,28 @@ struct LingoNativeApp: App {
         UITextField.appearance().textColor = inputTextColor
         UITextView.appearance().textColor = inputTextColor
 
+        NotificationCenter.default.addObserver(
+            forName: UITextField.textDidBeginEditingNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let field = notification.object as? UITextField else { return }
+            field.overrideUserInterfaceStyle = .light
+            field.textColor = inputTextColor
+            field.tintColor = UIColor(red: 0.12, green: 0.64, blue: 0.90, alpha: 1.0)
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: UITextView.textDidBeginEditingNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let textView = notification.object as? UITextView else { return }
+            textView.overrideUserInterfaceStyle = .light
+            textView.textColor = inputTextColor
+            textView.tintColor = UIColor(red: 0.12, green: 0.64, blue: 0.90, alpha: 1.0)
+        }
+
         let defaults = UserDefaults.standard
         let resetMarker = "learningEngineReset.2026-08-19.v2"
 
