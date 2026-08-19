@@ -601,18 +601,36 @@ struct QuizView: View {
                 ForEach(Array(question.phrase.foreign.split(whereSeparator: { $0.isWhitespace }).map(String.init).enumerated()), id: \.offset) { _, word in
                     let recognised = speakingWordIsRecognised(word)
                     Text(word)
-                        .font(.headline.weight(.black))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(recognised ? Color.lingoGreen : Color.white.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .font(.system(size: 21, weight: .bold, design: .rounded))
+                        .foregroundStyle(recognised ? Color.lingoPurple : Color.lingoInk)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 5)
+                        .background(recognised ? Color.lingoPurple.opacity(0.14) : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .overlay(alignment: .bottom) {
+                            Path { path in
+                                path.move(to: CGPoint(x: 0, y: 0.5))
+                                path.addLine(to: CGPoint(x: 1000, y: 0.5))
+                            }
+                            .stroke(
+                                recognised ? Color.lingoPurple : Color.lingoMuted.opacity(0.70),
+                                style: StrokeStyle(lineWidth: 1, dash: [1.5, 3.0])
+                            )
+                            .frame(height: 1)
+                            .clipped()
+                            .offset(y: 4)
+                        }
                 }
             }
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.lingoPurple.opacity(0.96))
+            .background(Color.lingoPurple.opacity(0.06))
+            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.lingoPurple.opacity(0.30), lineWidth: 2)
+            }
 
             if speechRecognizer.isRecording {
                 Label("Listening…", systemImage: "waveform")
@@ -641,12 +659,18 @@ struct QuizView: View {
                     Text(speechRecognizer.isRecording ? "STOP" : "SPEAK")
                 }
                 .font(.headline.weight(.black))
+                .foregroundStyle(Color.lingoPurple)
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.lingoPurple.opacity(0.07))
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.lingoPurple.opacity(0.48), lineWidth: 2)
+                }
             }
-            .buttonStyle(DuoButtonStyle(
-                fill: Color.lingoPurple,
-                shadow: Color.lingoPurple.opacity(0.65)
-            ))
+            .buttonStyle(.plain)
             .disabled(viewModel.status != .unanswered)
 
             Button {
@@ -655,12 +679,18 @@ struct QuizView: View {
             } label: {
                 Label("Hear it", systemImage: "speaker.wave.2.fill")
                     .font(.subheadline.weight(.black))
+                    .foregroundStyle(Color.lingoBlue)
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.lingoBlue.opacity(0.06))
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.lingoBlue.opacity(0.38), lineWidth: 2)
+                    }
             }
-            .buttonStyle(DuoButtonStyle(
-                fill: Color.lingoBlue,
-                shadow: Color.lingoBlue.opacity(0.65)
-            ))
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
     }
