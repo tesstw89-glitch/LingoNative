@@ -1,109 +1,377 @@
 // !$*UTF8*$!
 {
 	archiveVersion = 1;
-	classes = {};
+	classes = {
+	};
 	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2A8F5CFFD87674FB2B9862C3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16260C585190F1B74295BB31 /* ContentView.swift */; };
-		8F7FCF3C40F0221A1AB4B068 /* LingoNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E04D3A0690C3498C96DE5B24 /* LingoNativeApp.swift */; };
-		0FDBA07CF82C33591B6C4A29 /* LanguageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EA16D434C9AB61D6197FB93 /* LanguageModels.swift */; };
 		0539C8399D238FC1DEA63A45 /* CorpusLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2785D5A3339D7677385A88F /* CorpusLoader.swift */; };
-		F62FA9760D9794C40C0B8D84 /* ProgressStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9CBC7AE596662E75A9E1D28 /* ProgressStore.swift */; };
+		0FDBA07CF82C33591B6C4A29 /* LanguageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EA16D434C9AB61D6197FB93 /* LanguageModels.swift */; };
+		1561603D7E7B4C3EADA454F9 /* LearnPathView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8807E025CA4967F6DF8A6B24 /* LearnPathView.swift */; };
+		222F0DBFFE5EB23DCD3FD16F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6C36FFE920F24CEDB7CFDBFC /* Assets.xcassets */; };
+		26EE9F6D372CB91F7E3955CB /* StatPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C2DE54801B75D6870D78D2 /* StatPill.swift */; };
+		2A8F5CFFD87674FB2B9862C3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16260C585190F1B74295BB31 /* ContentView.swift */; };
+		5174A618DE2941C3D294320F /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3F0B579624C5EAF7AAD465 /* StatsView.swift */; };
+		5EC7DB6297E01A355BC8F280 /* LessonNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E17856509B1328068AAF8596 /* LessonNodeView.swift */; };
+		69F7B8299982814679BDB3FD /* CourseHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25972D8916B442012045948B /* CourseHomeView.swift */; };
+		8B2504B1E1C3B6AB0E81C4C6 /* CoursePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9B92DE36DDFB219E28950B /* CoursePickerView.swift */; };
+		8F7FCF3C40F0221A1AB4B068 /* LingoNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E04D3A0690C3498C96DE5B24 /* LingoNativeApp.swift */; };
+		A16C8106DBD3D385B27BCFCE /* QuizView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 239F69F37D707369BCBD79FD /* QuizView.swift */; };
+		A731196E1121549C576F2192 /* PracticeHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1F9FFFFCFB6867F18AD6F /* PracticeHubView.swift */; };
+		AA11BB22CC33DD44EE55FF66 /* TopicData in Resources */ = {isa = PBXBuildFile; fileRef = AB12CD34EF56AB78CD90EF12 /* TopicData */; };
+		AD7235C105355032C6BB5D5F /* BrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B2EDB500823AE6C0378DFC /* BrowseView.swift */; };
+		B58F78144BA195B017BDD98C /* UnitSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916CEDA018DDA5456F8B4FA8 /* UnitSectionView.swift */; };
+		BB576BA49B125F1567D8DA83 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 468CC4B04900762115265638 /* SettingsStore.swift */; };
+		BBF808FDC4B5E955888FD541 /* spanish_opinions.json in Resources */ = {isa = PBXBuildFile; fileRef = 36496C3135C215A8BA3DF081 /* spanish_opinions.json */; };
+		C7C5194EC5D46382F681FE48 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C1BBD6693495022252A354 /* SettingsView.swift */; };
+		D3257E25B967AA1559D4B05D /* french_opinions.json in Resources */ = {isa = PBXBuildFile; fileRef = 5AC100AB21EA2EDAC5B7D3F9 /* french_opinions.json */; };
+		E2A22B495454E14B04A46E93 /* SpeechServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18D0D1B3C81921C3F0D5E6C9 /* SpeechServices.swift */; };
 		E542B92179AB228682B2C8EE /* QuizViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16E5D0AE18F04659128657B /* QuizViewModel.swift */; };
 		F0A0D8AC6A18FF891AD529E7 /* DuoButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C842FCBE68C6AA24A6056A7A /* DuoButtonStyle.swift */; };
+		F62FA9760D9794C40C0B8D84 /* ProgressStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9CBC7AE596662E75A9E1D28 /* ProgressStore.swift */; };
 		F708EB0F5E6F65BFD38DADE0 /* Palette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A03738AD1B67DE97D9848A /* Palette.swift */; };
-		26EE9F6D372CB91F7E3955CB /* StatPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C2DE54801B75D6870D78D2 /* StatPill.swift */; };
-		8B2504B1E1C3B6AB0E81C4C6 /* CoursePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9B92DE36DDFB219E28950B /* CoursePickerView.swift */; };
-		1561603D7E7B4C3EADA454F9 /* LearnPathView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8807E025CA4967F6DF8A6B24 /* LearnPathView.swift */; };
-		5EC7DB6297E01A355BC8F280 /* LessonNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E17856509B1328068AAF8596 /* LessonNodeView.swift */; };
-		A16C8106DBD3D385B27BCFCE /* QuizView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 239F69F37D707369BCBD79FD /* QuizView.swift */; };
-		B58F78144BA195B017BDD98C /* UnitSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916CEDA018DDA5456F8B4FA8 /* UnitSectionView.swift */; };
-		D3257E25B967AA1559D4B05D /* french_opinions.json in Resources */ = {isa = PBXBuildFile; fileRef = 5AC100AB21EA2EDAC5B7D3F9 /* french_opinions.json */; };
-		BBF808FDC4B5E955888FD541 /* spanish_opinions.json in Resources */ = {isa = PBXBuildFile; fileRef = 36496C3135C215A8BA3DF081 /* spanish_opinions.json */; };
-		AA11BB22CC33DD44EE55FF66 /* TopicData in Resources */ = {isa = PBXBuildFile; fileRef = AB12CD34EF56AB78CD90EF12 /* TopicData */; };
-		222F0DBFFE5EB23DCD3FD16F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6C36FFE920F24CEDB7CFDBFC /* Assets.xcassets */; };
-		BB576BA49B125F1567D8DA83 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 468CC4B04900762115265638 /* SettingsStore.swift */; };
-		E2A22B495454E14B04A46E93 /* SpeechServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18D0D1B3C81921C3F0D5E6C9 /* SpeechServices.swift */; };
-		69F7B8299982814679BDB3FD /* CourseHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25972D8916B442012045948B /* CourseHomeView.swift */; };
-		A731196E1121549C576F2192 /* PracticeHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A1F9FFFFCFB6867F18AD6F /* PracticeHubView.swift */; };
-		AD7235C105355032C6BB5D5F /* BrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B2EDB500823AE6C0378DFC /* BrowseView.swift */; };
-		5174A618DE2941C3D294320F /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3F0B579624C5EAF7AAD465 /* StatsView.swift */; };
-		C7C5194EC5D46382F681FE48 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C1BBD6693495022252A354 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		38A007151ABE87CC01A5B6E9 /* LingoNative.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoNative.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		16260C585190F1B74295BB31 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		E04D3A0690C3498C96DE5B24 /* LingoNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LingoNativeApp.swift; sourceTree = "<group>"; };
-		8EA16D434C9AB61D6197FB93 /* LanguageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageModels.swift; sourceTree = "<group>"; };
-		B2785D5A3339D7677385A88F /* CorpusLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusLoader.swift; sourceTree = "<group>"; };
-		B9CBC7AE596662E75A9E1D28 /* ProgressStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressStore.swift; sourceTree = "<group>"; };
-		D16E5D0AE18F04659128657B /* QuizViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizViewModel.swift; sourceTree = "<group>"; };
-		C842FCBE68C6AA24A6056A7A /* DuoButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoButtonStyle.swift; sourceTree = "<group>"; };
 		05A03738AD1B67DE97D9848A /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
-		B7C2DE54801B75D6870D78D2 /* StatPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatPill.swift; sourceTree = "<group>"; };
-		DB9B92DE36DDFB219E28950B /* CoursePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoursePickerView.swift; sourceTree = "<group>"; };
-		8807E025CA4967F6DF8A6B24 /* LearnPathView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnPathView.swift; sourceTree = "<group>"; };
-		E17856509B1328068AAF8596 /* LessonNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonNodeView.swift; sourceTree = "<group>"; };
-		239F69F37D707369BCBD79FD /* QuizView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizView.swift; sourceTree = "<group>"; };
-		916CEDA018DDA5456F8B4FA8 /* UnitSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitSectionView.swift; sourceTree = "<group>"; };
-		5AC100AB21EA2EDAC5B7D3F9 /* french_opinions.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = french_opinions.json; sourceTree = "<group>"; };
-		36496C3135C215A8BA3DF081 /* spanish_opinions.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = spanish_opinions.json; sourceTree = "<group>"; };
-		AB12CD34EF56AB78CD90EF12 /* TopicData */ = {isa = PBXFileReference; lastKnownFileType = folder; path = TopicData; sourceTree = "<group>"; };
-		6C36FFE920F24CEDB7CFDBFC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		468CC4B04900762115265638 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		16260C585190F1B74295BB31 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		18D0D1B3C81921C3F0D5E6C9 /* SpeechServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechServices.swift; sourceTree = "<group>"; };
+		239F69F37D707369BCBD79FD /* QuizView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizView.swift; sourceTree = "<group>"; };
 		25972D8916B442012045948B /* CourseHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CourseHomeView.swift; sourceTree = "<group>"; };
+		36496C3135C215A8BA3DF081 /* spanish_opinions.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = spanish_opinions.json; sourceTree = "<group>"; };
+		38A007151ABE87CC01A5B6E9 /* LingoNative.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LingoNative.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		468CC4B04900762115265638 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		52C1BBD6693495022252A354 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		5AC100AB21EA2EDAC5B7D3F9 /* french_opinions.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = french_opinions.json; sourceTree = "<group>"; };
+		6C36FFE920F24CEDB7CFDBFC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		74A1F9FFFFCFB6867F18AD6F /* PracticeHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeHubView.swift; sourceTree = "<group>"; };
 		86B2EDB500823AE6C0378DFC /* BrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseView.swift; sourceTree = "<group>"; };
+		8807E025CA4967F6DF8A6B24 /* LearnPathView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearnPathView.swift; sourceTree = "<group>"; };
+		8EA16D434C9AB61D6197FB93 /* LanguageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageModels.swift; sourceTree = "<group>"; };
+		916CEDA018DDA5456F8B4FA8 /* UnitSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitSectionView.swift; sourceTree = "<group>"; };
+		AB12CD34EF56AB78CD90EF12 /* TopicData */ = {isa = PBXFileReference; lastKnownFileType = folder; path = TopicData; sourceTree = "<group>"; };
+		B2785D5A3339D7677385A88F /* CorpusLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusLoader.swift; sourceTree = "<group>"; };
+		B7C2DE54801B75D6870D78D2 /* StatPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatPill.swift; sourceTree = "<group>"; };
+		B9CBC7AE596662E75A9E1D28 /* ProgressStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressStore.swift; sourceTree = "<group>"; };
+		C842FCBE68C6AA24A6056A7A /* DuoButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoButtonStyle.swift; sourceTree = "<group>"; };
+		D16E5D0AE18F04659128657B /* QuizViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizViewModel.swift; sourceTree = "<group>"; };
+		DB9B92DE36DDFB219E28950B /* CoursePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoursePickerView.swift; sourceTree = "<group>"; };
+		E04D3A0690C3498C96DE5B24 /* LingoNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LingoNativeApp.swift; sourceTree = "<group>"; };
+		E17856509B1328068AAF8596 /* LessonNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonNodeView.swift; sourceTree = "<group>"; };
 		ED3F0B579624C5EAF7AAD465 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
-		52C1BBD6693495022252A354 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		7B8633C7EB6F5CB13673C25D /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		7B8633C7EB6F5CB13673C25D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		6CFC827E67DCAE34C72B9CED = {isa = PBXGroup; children = (1DF401F405384E02A0BF02D3 /* LingoNative */, 021F2B7F3E0C61452C987484 /* Products */); sourceTree = "<group>"; };
-		021F2B7F3E0C61452C987484 /* Products */ = {isa = PBXGroup; children = (38A007151ABE87CC01A5B6E9 /* LingoNative.app */); name = Products; sourceTree = "<group>"; };
-		1DF401F405384E02A0BF02D3 /* LingoNative */ = {isa = PBXGroup; children = (BF657CFE8769AAE6C0570C29 /* Models */, A024F06580C79B7582C3806A /* Resources */, 6EE67047A4B2648DDBB08231 /* Services */, 529389268FE012CA42456275 /* ViewModels */, 58492F208780FA5EF3807E8F /* Views */, 6C36FFE920F24CEDB7CFDBFC /* Assets.xcassets */, 16260C585190F1B74295BB31 /* ContentView.swift */, E04D3A0690C3498C96DE5B24 /* LingoNativeApp.swift */); path = LingoNative; sourceTree = "<group>"; };
-		BF657CFE8769AAE6C0570C29 /* Models */ = {isa = PBXGroup; children = (8EA16D434C9AB61D6197FB93 /* LanguageModels.swift */); path = Models; sourceTree = "<group>"; };
-		A024F06580C79B7582C3806A /* Resources */ = {isa = PBXGroup; children = (5AC100AB21EA2EDAC5B7D3F9 /* french_opinions.json */, 36496C3135C215A8BA3DF081 /* spanish_opinions.json */, AB12CD34EF56AB78CD90EF12 /* TopicData */); path = Resources; sourceTree = "<group>"; };
-		6EE67047A4B2648DDBB08231 /* Services */ = {isa = PBXGroup; children = (B2785D5A3339D7677385A88F /* CorpusLoader.swift */, B9CBC7AE596662E75A9E1D28 /* ProgressStore.swift */, 468CC4B04900762115265638 /* SettingsStore.swift */, 18D0D1B3C81921C3F0D5E6C9 /* SpeechServices.swift */, ); path = Services; sourceTree = "<group>"; };
-		529389268FE012CA42456275 /* ViewModels */ = {isa = PBXGroup; children = (D16E5D0AE18F04659128657B /* QuizViewModel.swift */); path = ViewModels; sourceTree = "<group>"; };
-		58492F208780FA5EF3807E8F /* Views */ = {isa = PBXGroup; children = (AF25E94FE9C780A02FA457BC /* Components */, DB9B92DE36DDFB219E28950B /* CoursePickerView.swift */, 8807E025CA4967F6DF8A6B24 /* LearnPathView.swift */, E17856509B1328068AAF8596 /* LessonNodeView.swift */, 239F69F37D707369BCBD79FD /* QuizView.swift */, 916CEDA018DDA5456F8B4FA8 /* UnitSectionView.swift */, 25972D8916B442012045948B /* CourseHomeView.swift */, 74A1F9FFFFCFB6867F18AD6F /* PracticeHubView.swift */, 86B2EDB500823AE6C0378DFC /* BrowseView.swift */, ED3F0B579624C5EAF7AAD465 /* StatsView.swift */, 52C1BBD6693495022252A354 /* SettingsView.swift */, ); path = Views; sourceTree = "<group>"; };
-		AF25E94FE9C780A02FA457BC /* Components */ = {isa = PBXGroup; children = (C842FCBE68C6AA24A6056A7A /* DuoButtonStyle.swift */, 05A03738AD1B67DE97D9848A /* Palette.swift */, B7C2DE54801B75D6870D78D2 /* StatPill.swift */); path = Components; sourceTree = "<group>"; };
+		021F2B7F3E0C61452C987484 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				38A007151ABE87CC01A5B6E9 /* LingoNative.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1DF401F405384E02A0BF02D3 /* LingoNative */ = {
+			isa = PBXGroup;
+			children = (
+				BF657CFE8769AAE6C0570C29 /* Models */,
+				A024F06580C79B7582C3806A /* Resources */,
+				6EE67047A4B2648DDBB08231 /* Services */,
+				529389268FE012CA42456275 /* ViewModels */,
+				58492F208780FA5EF3807E8F /* Views */,
+				6C36FFE920F24CEDB7CFDBFC /* Assets.xcassets */,
+				16260C585190F1B74295BB31 /* ContentView.swift */,
+				E04D3A0690C3498C96DE5B24 /* LingoNativeApp.swift */,
+			);
+			path = LingoNative;
+			sourceTree = "<group>";
+		};
+		529389268FE012CA42456275 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				D16E5D0AE18F04659128657B /* QuizViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		58492F208780FA5EF3807E8F /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AF25E94FE9C780A02FA457BC /* Components */,
+				DB9B92DE36DDFB219E28950B /* CoursePickerView.swift */,
+				8807E025CA4967F6DF8A6B24 /* LearnPathView.swift */,
+				E17856509B1328068AAF8596 /* LessonNodeView.swift */,
+				239F69F37D707369BCBD79FD /* QuizView.swift */,
+				916CEDA018DDA5456F8B4FA8 /* UnitSectionView.swift */,
+				25972D8916B442012045948B /* CourseHomeView.swift */,
+				74A1F9FFFFCFB6867F18AD6F /* PracticeHubView.swift */,
+				86B2EDB500823AE6C0378DFC /* BrowseView.swift */,
+				ED3F0B579624C5EAF7AAD465 /* StatsView.swift */,
+				52C1BBD6693495022252A354 /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		6CFC827E67DCAE34C72B9CED = {
+			isa = PBXGroup;
+			children = (
+				1DF401F405384E02A0BF02D3 /* LingoNative */,
+				021F2B7F3E0C61452C987484 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		6EE67047A4B2648DDBB08231 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B2785D5A3339D7677385A88F /* CorpusLoader.swift */,
+				B9CBC7AE596662E75A9E1D28 /* ProgressStore.swift */,
+				468CC4B04900762115265638 /* SettingsStore.swift */,
+				18D0D1B3C81921C3F0D5E6C9 /* SpeechServices.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A024F06580C79B7582C3806A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				5AC100AB21EA2EDAC5B7D3F9 /* french_opinions.json */,
+				36496C3135C215A8BA3DF081 /* spanish_opinions.json */,
+				AB12CD34EF56AB78CD90EF12 /* TopicData */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		AF25E94FE9C780A02FA457BC /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				C842FCBE68C6AA24A6056A7A /* DuoButtonStyle.swift */,
+				05A03738AD1B67DE97D9848A /* Palette.swift */,
+				B7C2DE54801B75D6870D78D2 /* StatPill.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		BF657CFE8769AAE6C0570C29 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				8EA16D434C9AB61D6197FB93 /* LanguageModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0E8A3AD980EC179856012B7E /* LingoNative */ = {isa = PBXNativeTarget; buildConfigurationList = CCBFB2F7B133DA12073314B0 /* Build configuration list for PBXNativeTarget "LingoNative" */; buildPhases = (E4F78730D65EE9F55E2BAC2F /* Sources */, 7B8633C7EB6F5CB13673C25D /* Frameworks */, C52ABA055DA4D0050382EB56 /* Resources */); buildRules = (); dependencies = (); name = LingoNative; productName = LingoNative; productReference = 38A007151ABE87CC01A5B6E9 /* LingoNative.app */; productType = "com.apple.product-type.application"; };
+		0E8A3AD980EC179856012B7E /* LingoNative */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CCBFB2F7B133DA12073314B0 /* Build configuration list for PBXNativeTarget "LingoNative" */;
+			buildPhases = (
+				E4F78730D65EE9F55E2BAC2F /* Sources */,
+				7B8633C7EB6F5CB13673C25D /* Frameworks */,
+				C52ABA055DA4D0050382EB56 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LingoNative;
+			productName = LingoNative;
+			productReference = 38A007151ABE87CC01A5B6E9 /* LingoNative.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		98F54143AB4E86B28C3AFEE0 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1600; LastUpgradeCheck = 1600; TargetAttributes = {0E8A3AD980EC179856012B7E = {CreatedOnToolsVersion = 16.0; }; }; }; buildConfigurationList = B21C1D195CCB6F2828E1C10C /* Build configuration list for PBXProject "LingoNative" */; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = 6CFC827E67DCAE34C72B9CED; productRefGroup = 021F2B7F3E0C61452C987484 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (0E8A3AD980EC179856012B7E /* LingoNative */); };
+		98F54143AB4E86B28C3AFEE0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					0E8A3AD980EC179856012B7E = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = B21C1D195CCB6F2828E1C10C /* Build configuration list for PBXProject "LingoNative" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 6CFC827E67DCAE34C72B9CED;
+			productRefGroup = 021F2B7F3E0C61452C987484 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0E8A3AD980EC179856012B7E /* LingoNative */,
+			);
+		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		C52ABA055DA4D0050382EB56 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (D3257E25B967AA1559D4B05D /* french_opinions.json in Resources */, BBF808FDC4B5E955888FD541 /* spanish_opinions.json in Resources */, 222F0DBFFE5EB23DCD3FD16F /* Assets.xcassets in Resources */, AA11BB22CC33DD44EE55FF66 /* TopicData in Resources */); runOnlyForDeploymentPostprocessing = 0; };
+		C52ABA055DA4D0050382EB56 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D3257E25B967AA1559D4B05D /* french_opinions.json in Resources */,
+				BBF808FDC4B5E955888FD541 /* spanish_opinions.json in Resources */,
+				222F0DBFFE5EB23DCD3FD16F /* Assets.xcassets in Resources */,
+				AA11BB22CC33DD44EE55FF66 /* TopicData in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		E4F78730D65EE9F55E2BAC2F /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (BB576BA49B125F1567D8DA83 /* SettingsStore.swift in Sources */, E2A22B495454E14B04A46E93 /* SpeechServices.swift in Sources */, 69F7B8299982814679BDB3FD /* CourseHomeView.swift in Sources */, A731196E1121549C576F2192 /* PracticeHubView.swift in Sources */, AD7235C105355032C6BB5D5F /* BrowseView.swift in Sources */, 5174A618DE2941C3D294320F /* StatsView.swift in Sources */, C7C5194EC5D46382F681FE48 /* SettingsView.swift in Sources */, 2A8F5CFFD87674FB2B9862C3 /* ContentView.swift in Sources */, 8F7FCF3C40F0221A1AB4B068 /* LingoNativeApp.swift in Sources */, 0FDBA07CF82C33591B6C4A29 /* LanguageModels.swift in Sources */, 0539C8399D238FC1DEA63A45 /* CorpusLoader.swift in Sources */, F62FA9760D9794C40C0B8D84 /* ProgressStore.swift in Sources */, E542B92179AB228682B2C8EE /* QuizViewModel.swift in Sources */, F0A0D8AC6A18FF891AD529E7 /* DuoButtonStyle.swift in Sources */, F708EB0F5E6F65BFD38DADE0 /* Palette.swift in Sources */, 26EE9F6D372CB91F7E3955CB /* StatPill.swift in Sources */, 8B2504B1E1C3B6AB0E81C4C6 /* CoursePickerView.swift in Sources */, 1561603D7E7B4C3EADA454F9 /* LearnPathView.swift in Sources */, 5EC7DB6297E01A355BC8F280 /* LessonNodeView.swift in Sources */, A16C8106DBD3D385B27BCFCE /* QuizView.swift in Sources */, B58F78144BA195B017BDD98C /* UnitSectionView.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		E4F78730D65EE9F55E2BAC2F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB576BA49B125F1567D8DA83 /* SettingsStore.swift in Sources */,
+				E2A22B495454E14B04A46E93 /* SpeechServices.swift in Sources */,
+				69F7B8299982814679BDB3FD /* CourseHomeView.swift in Sources */,
+				A731196E1121549C576F2192 /* PracticeHubView.swift in Sources */,
+				AD7235C105355032C6BB5D5F /* BrowseView.swift in Sources */,
+				5174A618DE2941C3D294320F /* StatsView.swift in Sources */,
+				C7C5194EC5D46382F681FE48 /* SettingsView.swift in Sources */,
+				2A8F5CFFD87674FB2B9862C3 /* ContentView.swift in Sources */,
+				8F7FCF3C40F0221A1AB4B068 /* LingoNativeApp.swift in Sources */,
+				0FDBA07CF82C33591B6C4A29 /* LanguageModels.swift in Sources */,
+				0539C8399D238FC1DEA63A45 /* CorpusLoader.swift in Sources */,
+				F62FA9760D9794C40C0B8D84 /* ProgressStore.swift in Sources */,
+				E542B92179AB228682B2C8EE /* QuizViewModel.swift in Sources */,
+				F0A0D8AC6A18FF891AD529E7 /* DuoButtonStyle.swift in Sources */,
+				F708EB0F5E6F65BFD38DADE0 /* Palette.swift in Sources */,
+				26EE9F6D372CB91F7E3955CB /* StatPill.swift in Sources */,
+				8B2504B1E1C3B6AB0E81C4C6 /* CoursePickerView.swift in Sources */,
+				1561603D7E7B4C3EADA454F9 /* LearnPathView.swift in Sources */,
+				5EC7DB6297E01A355BC8F280 /* LessonNodeView.swift in Sources */,
+				A16C8106DBD3D385B27BCFCE /* QuizView.swift in Sources */,
+				B58F78144BA195B017BDD98C /* UnitSectionView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		5E8ACABCCBE1DB5D311988C9 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_STRICT_OBJC_MSGSEND = YES; GCC_C_LANGUAGE_STANDARD = gnu17; GCC_OPTIMIZATION_LEVEL = 0; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
-		F84FD35CA8548076F2B51EDF /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; ENABLE_NS_ASSERTIONS = NO; GCC_C_LANGUAGE_STANDARD = gnu17; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
-		96F032C02E8A3FC1B0365FA6 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = LingoNative; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education"; INFOPLIST_KEY_NSMicrophoneUsageDescription = "LingoNative uses the microphone for pronunciation practice."; INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "LingoNative uses speech recognition to check pronunciation practice."; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 0.2; PRODUCT_BUNDLE_IDENTIFIER = com.example.LingoNative; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor; }; name = Debug; };
-		5BDD486E465E20A146951F86 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = LingoNative; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education"; INFOPLIST_KEY_NSMicrophoneUsageDescription = "LingoNative uses the microphone for pronunciation practice."; INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "LingoNative uses speech recognition to check pronunciation practice."; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 0.2; PRODUCT_BUNDLE_IDENTIFIER = com.example.LingoNative; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor; }; name = Release; };
+		5BDD486E465E20A146951F86 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = RYLASAZ54A;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = LingoNative;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "LingoNative uses the microphone for pronunciation practice.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "LingoNative uses speech recognition to check pronunciation practice.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.LingoNative;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		5E8ACABCCBE1DB5D311988C9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		96F032C02E8A3FC1B0365FA6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = RYLASAZ54A;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = LingoNative;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "LingoNative uses the microphone for pronunciation practice.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "LingoNative uses speech recognition to check pronunciation practice.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.LingoNative;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		F84FD35CA8548076F2B51EDF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B21C1D195CCB6F2828E1C10C /* Build configuration list for PBXProject "LingoNative" */ = {isa = XCConfigurationList; buildConfigurations = (5E8ACABCCBE1DB5D311988C9 /* Debug */, F84FD35CA8548076F2B51EDF /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		CCBFB2F7B133DA12073314B0 /* Build configuration list for PBXNativeTarget "LingoNative" */ = {isa = XCConfigurationList; buildConfigurations = (96F032C02E8A3FC1B0365FA6 /* Debug */, 5BDD486E465E20A146951F86 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		B21C1D195CCB6F2828E1C10C /* Build configuration list for PBXProject "LingoNative" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E8ACABCCBE1DB5D311988C9 /* Debug */,
+				F84FD35CA8548076F2B51EDF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CCBFB2F7B133DA12073314B0 /* Build configuration list for PBXNativeTarget "LingoNative" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96F032C02E8A3FC1B0365FA6 /* Debug */,
+				5BDD486E465E20A146951F86 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 	};
 	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
