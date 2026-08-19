@@ -5,6 +5,7 @@ struct UnitSectionView: View {
     let unitIndex: Int
     let sectionNumber: Int
     let startsTopicBlock: Bool
+    let activeNodeID: String?
     let course: LanguageCourse
     let allUnits: [LearningUnit]
     let allPhrases: [PhraseEntry]
@@ -12,6 +13,13 @@ struct UnitSectionView: View {
     @ObservedObject var settings: SettingsStore
 
     private let offsets: [CGFloat] = [0, 46, 72, 38, -16, -58, -76, -38]
+
+    private var nodes: [LessonNode] { unit.nodes() }
+
+    private var activeNodeInUnit: LessonNode? {
+        guard let activeNodeID else { return nil }
+        return nodes.first { $0.id == activeNodeID }
+    }
 
     var body: some View {
         VStack(spacing: 22) {
@@ -22,9 +30,10 @@ struct UnitSectionView: View {
             unitBanner
 
             VStack(spacing: 24) {
-                ForEach(Array(unit.nodes().enumerated()), id: \.element.id) { nodeIndex, node in
+                ForEach(Array(nodes.enumerated()), id: \.element.id) { nodeIndex, node in
                     let completed = progress.isCompleted(node.id)
                     let unlocked = isUnlocked(nodeIndex: nodeIndex)
+                    let current = node.id == activeNodeID
 
                     Group {
                         if unlocked || completed {
@@ -41,13 +50,28 @@ struct UnitSectionView: View {
                                     settings: settings
                                 )
                             } label: {
-                                LessonNodeView(number: nodeIndex + 1, completed: completed, unlocked: true)
+                                LessonNodeView(
+                                    number: nodeIndex + 1,
+                                    completed: completed,
+                                    unlocked: true,
+                                    isCurrent: current,
+                                    progress: progress.lessonProgress(nodeID: node.id),
+                                    isLast: nodeIndex == nodes.count - 1
+                                )
                             }
                             .buttonStyle(.plain)
                         } else {
-                            LessonNodeView(number: nodeIndex + 1, completed: false, unlocked: false)
+                            LessonNodeView(
+                                number: nodeIndex + 1,
+                                completed: false,
+                                unlocked: false,
+                                isCurrent: false,
+                                progress: 0,
+                                isLast: nodeIndex == nodes.count - 1
+                            )
                         }
                     }
+                    .id(node.id)
                     .offset(x: offsets[nodeIndex % offsets.count])
                 }
             }
@@ -80,7 +104,7 @@ struct UnitSectionView: View {
     }
 
     private var unitBanner: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("UNIT \(unitIndex + 1)")
                     .font(.caption.weight(.black))
@@ -89,14 +113,45 @@ struct UnitSectionView: View {
                     .font(.headline.weight(.black))
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("\(unit.phrases.count) phrases · \(unit.nodes().count) lesson\(unit.nodes().count == 1 ? "" : "s")")
+                Text("\(unit.phrases.count) phrases · \(nodes.count) lesson\(nodes.count == 1 ? "" : "s")")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.white.opacity(0.85))
             }
+
             Spacer(minLength: 8)
-            Image(systemName: unit.topicIcon)
-                .font(.title2)
-                .foregroundStyle(.white.opacity(0.92))
+
+            if let activeNodeInUnit {
+                NavigationLink {
+                    QuizView(
+                        session: .lesson(
+                            course: course,
+                            unit: unit,
+                            node: activeNodeInUnit,
+                            allPhrases: allPhrases,
+                            exerciseTypes: settings.enabledExerciseTypes
+                        ),
+                        progress: progress,
+                        settings: settings
+                    )
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: progress.lessonProgress(nodeID: activeNodeInUnit.id) > 0 ? "play.fill" : "arrow.right")
+                            .font(.headline.weight(.black))
+                        Text(progress.lessonProgress(nodeID: activeNodeInUnit.id) > 0 ? "RESUME" : "START")
+                            .font(.caption2.weight(.black))
+                    }
+                    .foregroundStyle(topicAccent)
+                    .frame(width: 66, height: 58)
+                    .background(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .shadow(color: .black.opacity(0.12), radius: 0, y: 4)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Image(systemName: unit.topicIcon)
+                    .font(.title2)
+                    .foregroundStyle(.white.opacity(0.92))
+            }
         }
         .padding(18)
         .background(topicAccent)
@@ -107,6 +162,7 @@ struct UnitSectionView: View {
         switch unit.topicID {
         case "clothes": return Color.lingoPurple
         case "places": return Color.lingoOrange
+        case "getting_around": return .teal
         case "opinions": return course == .french ? Color.lingoBlue : Color.lingoGreen
         default: return Color.lingoBlue
         }
@@ -116,7 +172,7 @@ struct UnitSectionView: View {
         if unitIndex == 0 && nodeIndex == 0 { return true }
 
         if nodeIndex > 0 {
-            let previous = unit.nodes()[nodeIndex - 1]
+            let previous = nodes[nodeIndex - 1]
             return progress.isCompleted(previous.id)
         }
 
