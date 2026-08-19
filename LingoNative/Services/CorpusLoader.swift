@@ -36,6 +36,7 @@ private enum UnitStrategy: String, Decodable {
     case firstSentence
     case beforeEmDash
     case afterEmDash
+    case beforeColon
 }
 
 private struct RawPhraseEntry: Decodable {
@@ -178,6 +179,7 @@ enum CorpusLoader {
         let ext = ns.pathExtension.isEmpty ? "json" : ns.pathExtension
 
         let urls = [
+            Bundle.main.url(forResource: base, withExtension: ext, subdirectory: "TopicData/LingoNative-topic-data"),
             Bundle.main.url(forResource: base, withExtension: ext, subdirectory: "TopicData"),
             Bundle.main.url(forResource: base, withExtension: ext)
         ]
@@ -210,6 +212,8 @@ enum CorpusLoader {
         case .afterEmDash:
             let pieces = firstSentence.components(separatedBy: " — ")
             return pieces.count > 1 ? pieces.dropFirst().joined(separator: " — ").trimmingCharacters(in: .whitespacesAndNewlines) : firstSentence
+        case .beforeColon:
+            return firstSentence.components(separatedBy: ":").first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? firstSentence
         }
     }
 
