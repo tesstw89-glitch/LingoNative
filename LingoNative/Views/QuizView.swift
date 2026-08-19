@@ -1,4 +1,6 @@
 import SwiftUI
+import WebKit
+import AVFoundation
 
 struct QuizView: View {
     let session: QuizSession
@@ -9,14 +11,17 @@ struct QuizView: View {
     @StateObject private var viewModel: QuizViewModel
     @StateObject private var speaker = SpeechSynthesizer()
     @StateObject private var speechRecognizer = SpeechRecognizerService()
+    @StateObject private var soundPlayer = FeedbackSoundPlayer()
     @State private var didRecordCompletion = false
+    @State private var showExitConfirmation = false
     @FocusState private var answerFieldFocused: Bool
 
     init(session: QuizSession, progress: ProgressStore, settings: SettingsStore) {
         self.session = session
         self.progress = progress
         self.settings = settings
-        _viewModel = StateObject(wrappedValue: QuizViewModel(session: session))
+        let savedSession = session.completionNodeID.flatMap { progress.savedLessonSession(for: $0) }
+        _viewModel = StateObject(wrappedValue: QuizViewModel(session: session, savedSession: savedSession))
     }
 
     var body: some View {
@@ -24,7 +29,7 @@ struct QuizView: View {
             if viewModel.isFinished {
                 completionView
                     .onAppear(perform: recordCompletionIfNeeded)
-            } else if settings.heartsEnabled && progress.hearts == 0 {
+            } else if settings.heartsEnabled && progress.hearts == 0 && session.completionNodeID != nil {
                 outOfHeartsView
             } else if let question = viewModel.currentQuestion {
                 questionView(question)
@@ -50,7 +55,8 @@ struct QuizView: View {
                     Button {
                         speaker.stop()
                         speechRecognizer.stop()
-                        dismiss()
+                        viewModel.persistSnapshot(to: progress)
+                        showExitConfirmation = true
                     } label: {
                         Image(systemName: "xmark")
                             .font(.headline.weight(.black))
@@ -73,9 +79,33 @@ struct QuizView: View {
                 }
             }
         }
+        .sheet(isPresented: $showExitConfirmation) {
+            exitConfirmationView
+        }
+        .onAppear {
+            viewModel.persistSnapshot(to: progress)
+        }
         .onChange(of: speechRecognizer.transcript) { _, transcript in
             if viewModel.currentQuestion?.type == .speaking {
                 viewModel.useTranscript(transcript)
+                viewModel.persistSnapshot(to: progress)
+            }
+        }
+        .onChange(of: viewModel.selectedAnswer) { _, _ in
+            viewModel.persistSnapshot(to: progress)
+        }
+        .onChange(of: viewModel.typedAnswer) { _, _ in
+            viewModel.persistSnapshot(to: progress)
+        }
+        .onChange(of: viewModel.selectedWordIndices) { _, _ in
+            viewModel.persistSnapshot(to: progress)
+        }
+        .onChange(of: viewModel.status) { _, newValue in
+            guard settings.soundEffectsEnabled else { return }
+            switch newValue {
+            case .correct: soundPlayer.playCorrect()
+            case .wrong: soundPlayer.playWrong()
+            case .unanswered: break
             }
         }
         .sensoryFeedback(trigger: viewModel.status) { _, newValue in
@@ -125,7 +155,7 @@ struct QuizView: View {
     }
 
     private func questionHeader(_ question: QuizQuestion) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label(question.type.title.uppercased(), systemImage: question.type.systemImage)
                     .font(.caption.weight(.black))
@@ -141,25 +171,50 @@ struct QuizView: View {
                 .foregroundStyle(Color.lingoInk)
 
             if shouldShowPrompt(question) {
-                HStack(alignment: .top, spacing: 10) {
-                    Text(question.prompt)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(Color.lingoInk)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    if question.direction == .foreignToEnglish && question.type != .listening {
-                        Button {
-                            speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
-                        } label: {
-                            Image(systemName: "speaker.wave.2.fill")
-                                .font(.headline)
-                                .foregroundStyle(Color.lingoBlue)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                characterPrompt(question)
             }
         }
+    }
+
+    private func characterPrompt(_ question: QuizQuestion) -> some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            RemoteSVGView(url: character(for: question).url)
+                .frame(width: 72, height: 92)
+                .accessibilityHidden(true)
+
+            HStack(alignment: .top, spacing: 10) {
+                Text(question.prompt)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(Color.lingoInk)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if question.direction == .foreignToEnglish && question.type != .listening {
+                    Button {
+                        speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
+                    } label: {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.headline)
+                            .foregroundStyle(Color.lingoBlue)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(15)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.lingoLine, lineWidth: 2)
+            }
+            .shadow(color: .black.opacity(0.07), radius: 0, y: 3)
+        }
+    }
+
+    private func character(for question: QuizQuestion) -> AppLessonCharacter {
+        let total = question.id.uuidString.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        let characters = AppLessonCharacter.allCases
+        return characters[total % characters.count]
     }
 
     private func instruction(for question: QuizQuestion) -> String {
@@ -197,7 +252,6 @@ struct QuizView: View {
             }
         }
     }
-
 
     private func matchingExercise(_ question: QuizQuestion) -> some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -239,7 +293,7 @@ struct QuizView: View {
                             .stroke(border, lineWidth: selected || viewModel.status != .unanswered ? 3 : 2)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(TactileCardButtonStyle())
                 .disabled(viewModel.status != .unanswered)
             }
         }
@@ -310,7 +364,7 @@ struct QuizView: View {
                                     .stroke(selected ? Color.clear : Color.lingoLine, lineWidth: 2)
                             }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(TactileCardButtonStyle())
                     .disabled(viewModel.status != .unanswered)
                     .opacity(selected ? 0.45 : 1)
                 }
@@ -338,6 +392,10 @@ struct QuizView: View {
 
     private func listeningExercise(_ question: QuizQuestion) -> some View {
         VStack(spacing: 20) {
+            RemoteSVGView(url: character(for: question).url)
+                .frame(width: 96, height: 120)
+                .accessibilityHidden(true)
+
             Button {
                 speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
             } label: {
@@ -350,7 +408,7 @@ struct QuizView: View {
                         .foregroundStyle(.white)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(TactileCardButtonStyle())
 
             TextField("Type what you hear", text: $viewModel.typedAnswer, axis: .vertical)
                 .font(.body.weight(.semibold))
@@ -389,7 +447,7 @@ struct QuizView: View {
                         .foregroundStyle(.white)
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(TactileCardButtonStyle())
             .disabled(viewModel.status != .unanswered)
 
             Text(speechRecognizer.isRecording ? "Listening… tap to stop" : "Tap the microphone and speak")
@@ -498,7 +556,7 @@ struct QuizView: View {
                     .stroke(border, lineWidth: selected || viewModel.status != .unanswered ? 3 : 2)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TactileCardButtonStyle())
         .disabled(viewModel.status != .unanswered)
     }
 
@@ -506,35 +564,46 @@ struct QuizView: View {
     private func feedbackBar(question: QuizQuestion) -> some View {
         VStack(spacing: 12) {
             if viewModel.status == .correct {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text("Correct!")
-                        .font(.headline.weight(.black))
+                HStack(spacing: 12) {
+                    RemoteSVGView(url: CloneVisualAsset.mascot.url)
+                        .frame(width: 50, height: 50)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Nicely done!")
+                            .font(.headline.weight(.black))
+                        Text("That one’s in the bag.")
+                            .font(.caption.weight(.bold))
+                    }
                     Spacer()
                     Button {
                         speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
                     } label: {
                         Image(systemName: "speaker.wave.2.fill")
+                            .font(.title3)
                     }
                     .buttonStyle(.plain)
                 }
                 .foregroundStyle(Color.lingoGreenDark)
             } else if viewModel.status == .wrong {
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "xmark.circle.fill")
-                        Text("Not quite")
+                HStack(alignment: .top, spacing: 12) {
+                    RemoteSVGView(url: CloneVisualAsset.mascotBad.url)
+                        .frame(width: 50, height: 50)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Try again")
                             .font(.headline.weight(.black))
-                        Spacer()
-                        Button {
-                            speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
-                        } label: {
-                            Image(systemName: "speaker.wave.2.fill")
-                        }
-                        .buttonStyle(.plain)
+                        Text("Correct answer: \(question.correctAnswer)")
+                            .font(.subheadline.weight(.bold))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text("Correct answer: \(question.correctAnswer)")
-                        .font(.subheadline.weight(.bold))
+                    Spacer()
+                    Button {
+                        speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
+                    } label: {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.title3)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .foregroundStyle(Color.lingoWrong)
@@ -552,9 +621,9 @@ struct QuizView: View {
                 ))
                 .disabled(!viewModel.responseIsReady)
             } else {
-                Button("CONTINUE") {
+                Button(viewModel.status == .wrong ? "RETRY LATER" : "NEXT") {
                     speechRecognizer.stop()
-                    viewModel.continueAfterFeedback()
+                    viewModel.continueAfterFeedback(progressStore: progress)
                 }
                 .buttonStyle(DuoButtonStyle(
                     fill: viewModel.status == .correct ? Color.lingoGreen : Color.lingoWrong,
@@ -565,66 +634,123 @@ struct QuizView: View {
         .padding(.horizontal, 20)
         .padding(.top, 14)
         .padding(.bottom, 10)
-        .background(.ultraThinMaterial)
+        .background(feedbackBackground)
         .overlay(alignment: .top) {
             Divider()
         }
     }
 
-    private var completionView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            ZStack {
-                Circle()
-                    .fill(Color.lingoGold.opacity(0.18))
-                    .frame(width: 150, height: 150)
-                Image(systemName: session.completionNodeID == nil ? "sparkles" : "trophy.fill")
-                    .font(.system(size: 68))
-                    .foregroundStyle(Color.lingoGold)
-            }
-
-            VStack(spacing: 8) {
-                Text(session.completionNodeID == nil ? "Practice complete!" : "Lesson complete!")
-                    .font(.largeTitle.weight(.black))
-                    .foregroundStyle(Color.lingoInk)
-                Text("Mistakes were recycled into the session, and a fresh set will be drawn next time.")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.lingoMuted)
-                    .multilineTextAlignment(.center)
-            }
-
-            HStack(spacing: 12) {
-                StatPill(systemImage: "bolt.fill", value: "+\(viewModel.earnedXP) XP", tint: Color.lingoGold)
-                StatPill(systemImage: "xmark.circle.fill", value: "\(viewModel.mistakes)", tint: Color.lingoWrong)
-            }
-
-            Spacer()
-
-            Button("CONTINUE") {
-                dismiss()
-            }
-            .buttonStyle(DuoButtonStyle())
+    private var feedbackBackground: Color {
+        switch viewModel.status {
+        case .correct: return Color.lingoCorrect.opacity(0.14)
+        case .wrong: return Color.lingoWrong.opacity(0.10)
+        case .unanswered: return Color(.systemBackground)
         }
-        .padding(24)
-        .background(Color(.systemGroupedBackground))
+    }
+
+    private var completionView: some View {
+        ZStack {
+            Color(.systemGroupedBackground).ignoresSafeArea()
+            ConfettiOverlay()
+
+            VStack(spacing: 24) {
+                Spacer()
+
+                RemoteSVGView(url: CloneVisualAsset.finish.url)
+                    .frame(width: 150, height: 150)
+                    .accessibilityHidden(true)
+
+                VStack(spacing: 8) {
+                    Text(session.completionNodeID == nil ? "Practice complete!" : "Lesson complete!")
+                        .font(.largeTitle.weight(.black))
+                        .foregroundStyle(Color.lingoInk)
+                    Text(session.completionNodeID == nil
+                         ? "Practice is a safe zone: mistakes cost no hearts, and finishing restores one."
+                         : "Mistakes were recycled into the session, and your exact place was saved along the way.")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.lingoMuted)
+                        .multilineTextAlignment(.center)
+                }
+
+                HStack(spacing: 12) {
+                    completionStatCard(title: "TOTAL XP", value: "+\(viewModel.earnedXP)", icon: "bolt.fill", tint: Color.lingoGold)
+                    completionStatCard(title: "HEARTS", value: "\(progress.hearts)", icon: "heart.fill", tint: .red)
+                }
+
+                if viewModel.mistakes > 0 {
+                    Label("\(viewModel.mistakes) mistake\(viewModel.mistakes == 1 ? "" : "s") recycled", systemImage: "arrow.counterclockwise.circle.fill")
+                        .font(.subheadline.weight(.black))
+                        .foregroundStyle(Color.lingoWrong)
+                }
+
+                Spacer()
+
+                Button("CONTINUE") {
+                    dismiss()
+                }
+                .buttonStyle(DuoButtonStyle())
+            }
+            .padding(24)
+        }
+    }
+
+    private func completionStatCard(title: String, value: String, icon: String, tint: Color) -> some View {
+        VStack(spacing: 0) {
+            Text(title)
+                .font(.caption2.weight(.black))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+                .background(tint)
+
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                Text(value)
+            }
+            .font(.title3.weight(.black))
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 18)
+            .background(.white)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(tint, lineWidth: 2)
+        }
     }
 
     private var outOfHeartsView: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             Spacer()
-            Image(systemName: "heart.slash.fill")
-                .font(.system(size: 72))
-                .foregroundStyle(.red)
+
+            RemoteSVGView(url: CloneVisualAsset.mascotBad.url)
+                .frame(width: 120, height: 120)
+                .accessibilityHidden(true)
+
             Text("Out of hearts")
                 .font(.largeTitle.weight(.black))
                 .foregroundStyle(Color.lingoInk)
-            Text("This is your app, so there’s no shop or waiting timer. Refill and carry on.")
+
+            Text("Spend XP for a heart, or use the emergency refill. Practice sessions never cost hearts and restore one when you finish.")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.lingoMuted)
                 .multilineTextAlignment(.center)
+
+            if progress.xp >= 100 {
+                Button("SPEND 100 XP · +1 HEART") {
+                    _ = progress.buyHeart()
+                }
+                .buttonStyle(DuoButtonStyle(fill: Color.lingoGold, shadow: Color.lingoOrange))
+            } else {
+                Text("You need \(100 - progress.xp) more XP to buy a heart.")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.lingoMuted)
+            }
+
             Spacer()
-            Button("REFILL HEARTS") {
+
+            Button("EMERGENCY REFILL") {
                 progress.refillHearts()
             }
             .buttonStyle(DuoButtonStyle(fill: .red, shadow: Color(red: 0.72, green: 0.13, blue: 0.16)))
@@ -633,13 +759,228 @@ struct QuizView: View {
         .background(Color(.systemGroupedBackground))
     }
 
+    private var exitConfirmationView: some View {
+        VStack(spacing: 18) {
+            RemoteSVGView(url: CloneVisualAsset.mascotSad.url)
+                .frame(width: 100, height: 100)
+                .accessibilityHidden(true)
+
+            Text("Wait, don’t go!")
+                .font(.title2.weight(.black))
+                .foregroundStyle(Color.lingoInk)
+
+            Text(session.completionNodeID == nil
+                 ? "End this practice session?"
+                 : "Your exact lesson position is saved, so you can come straight back to it.")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.lingoMuted)
+                .multilineTextAlignment(.center)
+
+            Button("KEEP LEARNING") {
+                showExitConfirmation = false
+            }
+            .buttonStyle(DuoButtonStyle())
+
+            Button("SAVE & EXIT") {
+                speaker.stop()
+                speechRecognizer.stop()
+                viewModel.persistSnapshot(to: progress)
+                showExitConfirmation = false
+                dismiss()
+            }
+            .font(.subheadline.weight(.black))
+            .foregroundStyle(Color.lingoWrong)
+        }
+        .padding(24)
+        .presentationDetents([.height(390)])
+        .presentationDragIndicator(.visible)
+    }
+
     private func recordCompletionIfNeeded() {
         guard !didRecordCompletion else { return }
         didRecordCompletion = true
+
+        if settings.soundEffectsEnabled {
+            soundPlayer.playCompletion()
+        }
+
         if let nodeID = session.completionNodeID {
             progress.complete(nodeID: nodeID, earnedXP: viewModel.earnedXP)
         } else {
-            progress.recordPracticeSession(earnedXP: viewModel.earnedXP)
+            progress.recordPracticeSession(earnedXP: viewModel.earnedXP, restoreHeart: settings.heartsEnabled)
+        }
+    }
+}
+
+private enum AppLessonCharacter: String, CaseIterable {
+    case girl
+    case boy
+    case woman
+    case man
+    case robot
+    case zombie
+
+    var url: URL {
+        cloneAssetURL("\(rawValue).svg")
+    }
+}
+
+private enum CloneVisualAsset: String {
+    case mascot = "mascot.svg"
+    case mascotBad = "mascot_bad.svg"
+    case mascotSad = "mascot_sad.svg"
+    case finish = "finish.svg"
+
+    var url: URL { cloneAssetURL(rawValue) }
+}
+
+private func cloneAssetURL(_ filename: String) -> URL {
+    URL(string: "https://raw.githubusercontent.com/sanidhyy/duolingo-clone/268221c205148c07bfb22f9adf3b46bdcd048d9a/public/\(filename)")!
+}
+
+private struct RemoteSVGView: UIViewRepresentable {
+    let url: URL
+
+    final class Coordinator {
+        var loadedURL: URL?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
+        webView.scrollView.isScrollEnabled = false
+        webView.isUserInteractionEnabled = false
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        guard context.coordinator.loadedURL != url else { return }
+        context.coordinator.loadedURL = url
+        let source = url.absoluteString
+        let html = """
+        <html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+        <body style="margin:0;background:transparent;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+        <img src="\(source)" style="width:100%;height:100%;object-fit:contain;" />
+        </body></html>
+        """
+        webView.loadHTMLString(html, baseURL: nil)
+    }
+}
+
+private final class FeedbackSoundPlayer: ObservableObject {
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private let sampleRate = 44_100.0
+
+    init() {
+        engine.attach(player)
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+        try? engine.start()
+    }
+
+    deinit {
+        engine.stop()
+    }
+
+    func playCorrect() {
+        playTone(frequency: 880, duration: 0.12, amplitude: 0.16)
+    }
+
+    func playWrong() {
+        playTone(frequency: 220, duration: 0.18, amplitude: 0.14)
+    }
+
+    func playCompletion() {
+        playTone(frequency: 1_046.5, duration: 0.32, amplitude: 0.17)
+    }
+
+    private func playTone(frequency: Double, duration: Double, amplitude: Float) {
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        let frameCount = AVAudioFrameCount(sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channel = buffer.floatChannelData?[0] else { return }
+
+        buffer.frameLength = frameCount
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / sampleRate
+            let fade = min(1, min(t / 0.02, (duration - t) / 0.04))
+            channel[frame] = amplitude * Float(max(0, fade)) * sin(Float(2 * Double.pi * frequency * t))
+        }
+
+        if !engine.isRunning {
+            try? engine.start()
+        }
+        player.stop()
+        player.scheduleBuffer(buffer, at: nil, options: .interrupts)
+        player.play()
+    }
+}
+
+private struct TactileCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .offset(y: configuration.isPressed ? 3 : 0)
+            .shadow(
+                color: .black.opacity(configuration.isPressed ? 0.05 : 0.10),
+                radius: 0,
+                y: configuration.isPressed ? 1 : 4
+            )
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
+private struct ConfettiParticle: Identifiable {
+    let id = UUID()
+    let x: CGFloat
+    let delay: Double
+    let duration: Double
+    let rotation: Double
+    let hue: Double
+    let size: CGFloat
+}
+
+private struct ConfettiOverlay: View {
+    @State private var animate = false
+
+    private let particles: [ConfettiParticle] = (0..<90).map { _ in
+        ConfettiParticle(
+            x: CGFloat.random(in: 0.02...0.98),
+            delay: Double.random(in: 0...0.9),
+            duration: Double.random(in: 1.7...3.0),
+            rotation: Double.random(in: 180...900),
+            hue: Double.random(in: 0...1),
+            size: CGFloat.random(in: 5...11)
+        )
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ForEach(particles) { particle in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(hue: particle.hue, saturation: 0.78, brightness: 0.95))
+                    .frame(width: particle.size, height: particle.size * 1.55)
+                    .rotationEffect(.degrees(animate ? particle.rotation : 0))
+                    .position(
+                        x: geometry.size.width * particle.x,
+                        y: animate ? geometry.size.height + 30 : -30
+                    )
+                    .animation(
+                        .easeIn(duration: particle.duration).delay(particle.delay),
+                        value: animate
+                    )
+            }
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
+        .onAppear {
+            animate = true
         }
     }
 }
