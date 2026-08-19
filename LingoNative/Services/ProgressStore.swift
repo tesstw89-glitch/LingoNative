@@ -337,8 +337,8 @@ final class ProgressStore: ObservableObject {
                 guard !excludedKeys.contains(key) else { return false }
                 let value = stats(course: course, phrase: phrase)
                 guard value.learningStage != .unseen else { return false }
-                // Recognition is deliberately due immediately: the next encounter must be
-                // the mandatory token-construction gate before any unaided production.
+                // Recognition is deliberately due immediately so the next encounter can
+                // move from visual token-building to the audio-only token build.
                 if value.learningStage == .recognition { return true }
                 return value.recallProbability(at: now) <= threshold || value.lastReviewWasCorrect == false
             }
@@ -554,23 +554,43 @@ final class ProgressStore: ObservableObject {
     private func advanceLearningStage(_ stats: inout PhraseProgress, after type: ExerciseType) {
         switch type {
         case .introduction:
+            // Kept only for backwards-compatible saved data. New lessons do not generate reveals.
             if stats.learningStage == .unseen { stats.learningStage = .introduced }
+
         case .multipleChoice, .matching, .lemma:
             if stats.learningStage < .recognition { stats.learningStage = .recognition }
+
         case .wordBank:
-            // Word construction is a mandatory gate: only a successful token build can
-            // unlock unaided target-language production.
-            if stats.learningStage >= .recognition && stats.learningStage < .assistedRecall {
+            // Both visual drag/drop and audio drag/drop are recorded as token construction.
+            // First success: visual build -> recognition. Second success: audio build -> assisted recall.
+            stats.successfulRecallCount = (stats.successfulRecallCount ?? 0) + 1
+            if stats.learningStage < .recognition {
+                stats.learningStage = .recognition
+            } else if stats.learningStage == .recognition {
                 stats.learningStage = .assistedRecall
             }
+
         case .fillBlank:
-            // Cloze is useful practice but cannot substitute for the token-construction gate.
             break
-        case .typing, .listening, .speaking:
+
+        case .listening:
+            // Listen-and-write is the third successful encounter in the new path. Only then
+            // does plain English -> target writing unlock.
+            stats.successfulRecallCount = (stats.successfulRecallCount ?? 0) + 1
+            if stats.learningStage == .assistedRecall {
+                if (stats.successfulRecallCount ?? 0) >= 3 {
+                    stats.learningStage = .freeRecall
+                }
+            } else if stats.learningStage == .freeRecall,
+                      (stats.successfulRecallCount ?? 0) >= 5 {
+                stats.learningStage = .established
+            }
+
+        case .typing, .speaking:
             stats.successfulRecallCount = (stats.successfulRecallCount ?? 0) + 1
             if stats.learningStage < .freeRecall {
                 stats.learningStage = .freeRecall
-            } else if (stats.successfulRecallCount ?? 0) >= 3 {
+            } else if (stats.successfulRecallCount ?? 0) >= 4 {
                 stats.learningStage = .established
             }
         }
@@ -581,13 +601,17 @@ final class ProgressStore: ObservableObject {
         case .unseen, .introduced:
             stats.learningStage = .introduced
         case .recognition:
+            // If audio-only token building fails, show the English prompt and rebuild visually.
             stats.learningStage = .introduced
         case .assistedRecall:
+            // If listen-and-write fails, return to audio + tokens.
             stats.learningStage = .recognition
-        case .freeRecall, .established:
-            // A lapse in unaided recall requires rebuilding the phrase with tokens before
-            // another unaided attempt is permitted.
-            stats.learningStage = .recognition
+        case .freeRecall:
+            // If plain writing fails, step back only one rung to listen-and-write.
+            stats.learningStage = .assistedRecall
+            stats.successfulRecallCount = max(0, (stats.successfulRecallCount ?? 0) - 1)
+        case .established:
+            stats.learningStage = .freeRecall
             stats.successfulRecallCount = max(0, (stats.successfulRecallCount ?? 0) - 1)
         }
     }
