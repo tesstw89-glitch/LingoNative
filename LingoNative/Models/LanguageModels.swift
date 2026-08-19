@@ -6,7 +6,7 @@ struct Lemma: Codable, Hashable, Identifiable {
     let english: String
 }
 
-struct PhraseEntry: Identifiable, Hashable {
+struct PhraseEntry: Identifiable, Hashable, Codable {
     let id: String
     let topicID: String
     let topicTitle: String
@@ -146,7 +146,7 @@ enum ExerciseType: String, Codable, CaseIterable, Identifiable, Hashable {
     }
 }
 
-struct QuizQuestion: Identifiable, Equatable {
+struct QuizQuestion: Identifiable, Equatable, Codable {
     let id: UUID
     let type: ExerciseType
     let prompt: String
@@ -180,10 +180,30 @@ struct QuizQuestion: Identifiable, Equatable {
     }
 }
 
-enum QuizStatus: Equatable {
+enum QuizStatus: String, Codable, Equatable {
     case unanswered
     case correct
     case wrong
+}
+
+struct SavedLessonSession: Codable, Equatable {
+    let nodeID: String
+    let course: LanguageCourse
+    let questions: [QuizQuestion]
+    let currentIndex: Int
+    let selectedAnswer: String?
+    let typedAnswer: String
+    let selectedWordIndices: [Int]
+    let status: QuizStatus
+    let mistakes: Int
+    let correctCount: Int
+    let initialQuestionCount: Int
+    let updatedAt: Date
+
+    var progress: Double {
+        guard !questions.isEmpty else { return 0 }
+        return min(1, Double(currentIndex) / Double(questions.count))
+    }
 }
 
 struct QuizSession {
