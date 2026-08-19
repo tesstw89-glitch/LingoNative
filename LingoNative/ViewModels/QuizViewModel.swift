@@ -14,6 +14,7 @@ final class QuizViewModel: ObservableObject {
 
     let session: QuizSession
     private let initialQuestionCount: Int
+    private var questionStartedAt = Date()
 
     init(
         session: QuizSession,
@@ -190,11 +191,22 @@ final class QuizViewModel: ObservableObject {
         }
 
         let correct = Self.answersMatch(response, question.correctAnswer)
+        let parts = Self.partialCredit(
+            for: question,
+            selectedWordIndices: selectedWordIndices,
+            responseWasCorrect: correct
+        )
+        let responseTime = max(0.2, Date().timeIntervalSince(questionStartedAt))
+
         progressStore.recordAttempt(
             course: session.course,
             phrase: question.phrase,
             correct: correct,
-            exerciseType: question.type
+            exerciseType: question.type,
+            direction: question.direction,
+            responseTimeSeconds: responseTime,
+            correctParts: parts.correct,
+            totalParts: parts.total
         )
 
         if correct {
@@ -238,6 +250,7 @@ final class QuizViewModel: ObservableObject {
         typedAnswer = ""
         selectedWordIndices = []
         status = .unanswered
+        questionStartedAt = Date()
     }
 
     private static func makeQuestions(session: QuizSession, progressStore: ProgressStore) -> [QuizQuestion] {
@@ -274,7 +287,14 @@ final class QuizViewModel: ObservableObject {
                     phrasePool: session.phrasePool,
                     allPhrases: session.allPhrases
                 )
-                let recognitionType = exerciseType(for: phrase, stage: .introduced, allowed: allowed)
+                let recognitionType = exerciseType(
+                    for: phrase,
+                    stage: .introduced,
+                    allowed: allowed,
+                    course: session.course,
+                    progressStore: progressStore,
+                    index: index
+                )
                 let recognition = makeQuestion(
                     phrase: phrase,
                     type: recognitionType,
@@ -296,8 +316,9 @@ final class QuizViewModel: ObservableObject {
         }
 
         if session.completionNodeID != nil {
-            // Interleave a few previously learned phrases whose HLR recall probability has
-            // decayed. Unseen/future material is excluded by duePhrases().
+            // Interleave a few previously learned phrases. Recognition-stage phrases are
+            // deliberately treated as due so the mandatory drag/token gate appears promptly
+            // in later lessons before those phrases can ever reach free production.
             let excluded = Set(corePhrases.map { $0.progressKey(course: session.course) })
             let reviewPhrases = progressStore.duePhrases(
                 course: session.course,
@@ -331,7 +352,14 @@ final class QuizViewModel: ObservableObject {
         let allowed = allowedOverride ?? (session.exerciseTypes.isEmpty
             ? Set(ExerciseType.userSelectableCases)
             : session.exerciseTypes.subtracting([.introduction]))
-        let type = exerciseType(for: phrase, stage: stage, allowed: allowed)
+        let type = exerciseType(
+            for: phrase,
+            stage: stage,
+            allowed: allowed,
+            course: session.course,
+            progressStore: progressStore,
+            index: index
+        )
         return makeQuestion(
             phrase: phrase,
             type: type,
@@ -345,7 +373,10 @@ final class QuizViewModel: ObservableObject {
     private static func exerciseType(
         for phrase: PhraseEntry,
         stage: PhraseLearningStage,
-        allowed: Set<ExerciseType>
+        allowed: Set<ExerciseType>,
+        course: LanguageCourse,
+        progressStore: ProgressStore,
+        index: Int
     ) -> ExerciseType {
         guard stage != .unseen else { return .introduction }
 
@@ -355,7 +386,7 @@ final class QuizViewModel: ObservableObject {
         func compatible(_ candidates: [ExerciseType]) -> [ExerciseType] {
             candidates.filter { type in
                 guard allowed.contains(type) else { return false }
-                if (type == .wordBank || type == .fillBlank) && tokenCount < 2 { return false }
+                if type == .fillBlank && tokenCount < 2 { return false }
                 if type == .lemma && !hasLemmas { return false }
                 return true
             }
@@ -367,21 +398,99 @@ final class QuizViewModel: ObservableObject {
         case .introduced:
             // Recognition first. If the user disabled every recognition exercise, multiple
             // choice remains as the mandatory safety scaffold rather than jumping to production.
-            return compatible([.multipleChoice, .matching, .lemma]).randomElement() ?? .multipleChoice
+            let candidates = compatible([.multipleChoice, .matching, .lemma])
+            return adaptiveChoice(
+                candidates.isEmpty ? [.multipleChoice] : candidates,
+                phrase: phrase,
+                stage: stage,
+                course: course,
+                progressStore: progressStore,
+                index: index
+            ) ?? .multipleChoice
         case .recognition:
-            // Assisted production before free writing/speaking.
-            let assisted = compatible([.wordBank, .fillBlank])
-            if let type = assisted.randomElement() { return type }
-            // Single-word phrases have no meaningful sentence bank, so use a gentle fallback.
-            return compatible([.multipleChoice, .matching, .lemma]).randomElement() ?? .multipleChoice
+            // Mandatory construction gate. Settings cannot bypass this: every phrase must be
+            // successfully assembled from target-language tokens before unaided production.
+            return .wordBank
         case .assistedRecall:
-            // Only now is unaided target-language production permitted.
-            return compatible([.typing, .listening, .speaking]).randomElement()
-                ?? compatible([.wordBank, .fillBlank]).randomElement()
-                ?? .multipleChoice
+            // The token gate has been passed. Now the adaptive learner can choose the right
+            // difficulty among cloze, another token build, typing, listening and speaking.
+            let candidates = compatible([.fillBlank, .wordBank, .typing, .listening, .speaking])
+            return adaptiveChoice(
+                candidates.isEmpty ? [.wordBank] : candidates,
+                phrase: phrase,
+                stage: stage,
+                course: course,
+                progressStore: progressStore,
+                index: index
+            ) ?? .wordBank
         case .freeRecall, .established:
-            let mixed = compatible(Array(allowed))
-            return mixed.randomElement() ?? .multipleChoice
+            let candidates = compatible(Array(allowed))
+            return adaptiveChoice(
+                candidates.isEmpty ? [.multipleChoice] : candidates,
+                phrase: phrase,
+                stage: stage,
+                course: course,
+                progressStore: progressStore,
+                index: index
+            ) ?? .multipleChoice
+        }
+    }
+
+    private static func adaptiveChoice(
+        _ candidates: [ExerciseType],
+        phrase: PhraseEntry,
+        stage: PhraseLearningStage,
+        course: LanguageCourse,
+        progressStore: ProgressStore,
+        index: Int
+    ) -> ExerciseType? {
+        guard !candidates.isEmpty else { return nil }
+
+        // Birdbrain-style rollout: first collect a meaningful history in shadow mode.
+        // After 60 answered exercises per language, choose near a 78% predicted success
+        // target while retaining some random exploration so the model keeps learning.
+        guard progressStore.adaptiveObservationCount(course: course) >= 60 else {
+            return candidates.randomElement()
+        }
+        if Int.random(in: 0..<8) == 0 {
+            return candidates.randomElement()
+        }
+
+        let target = 0.78
+        return candidates.min { lhs, rhs in
+            let lhsDirection = predictedDirection(for: lhs, stage: stage, index: index)
+            let rhsDirection = predictedDirection(for: rhs, stage: stage, index: index)
+            let lhsProbability = progressStore.predictedSuccess(
+                course: course,
+                phrase: phrase,
+                exerciseType: lhs,
+                direction: lhsDirection,
+                stage: stage
+            )
+            let rhsProbability = progressStore.predictedSuccess(
+                course: course,
+                phrase: phrase,
+                exerciseType: rhs,
+                direction: rhsDirection,
+                stage: stage
+            )
+            return abs(lhsProbability - target) < abs(rhsProbability - target)
+        }
+    }
+
+    private static func predictedDirection(
+        for type: ExerciseType,
+        stage: PhraseLearningStage,
+        index: Int
+    ) -> QuestionDirection {
+        switch type {
+        case .introduction, .lemma:
+            return .foreignToEnglish
+        case .multipleChoice, .matching:
+            if stage <= .recognition { return .foreignToEnglish }
+            return index.isMultiple(of: 2) ? .foreignToEnglish : .englishToForeign
+        case .typing, .wordBank, .fillBlank, .listening, .speaking:
+            return .englishToForeign
         }
     }
 
@@ -470,7 +579,7 @@ final class QuizViewModel: ObservableObject {
         case .matching:
             let direction: QuestionDirection = stage <= .recognition
                 ? .foreignToEnglish
-                : (Bool.random() ? .foreignToEnglish : .englishToForeign)
+                : (index.isMultiple(of: 2) ? .foreignToEnglish : .englishToForeign)
             let correct = answerText(for: phrase, direction: direction)
             return QuizQuestion(
                 type: .matching,
@@ -563,6 +672,26 @@ final class QuizViewModel: ObservableObject {
         }
 
         return (blanked, answer, ([answer] + distractors).shuffled())
+    }
+
+    private static func partialCredit(
+        for question: QuizQuestion,
+        selectedWordIndices: [Int],
+        responseWasCorrect: Bool
+    ) -> (correct: Int, total: Int) {
+        guard question.type == .wordBank else {
+            return (responseWasCorrect ? 1 : 0, 1)
+        }
+
+        let answerTokens = tokens(from: question.correctAnswer)
+        let responseTokens = selectedWordIndices.compactMap { index in
+            question.wordBankTokens.indices.contains(index) ? question.wordBankTokens[index] : nil
+        }
+        let total = max(1, max(answerTokens.count, responseTokens.count))
+        let matchingPositions = zip(answerTokens, responseTokens).reduce(0) { count, pair in
+            count + (normalize(pair.0) == normalize(pair.1) ? 1 : 0)
+        }
+        return (matchingPositions, total)
     }
 
     private static func tokens(from text: String) -> [String] {
