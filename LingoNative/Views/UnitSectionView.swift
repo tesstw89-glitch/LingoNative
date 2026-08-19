@@ -3,6 +3,8 @@ import SwiftUI
 struct UnitSectionView: View {
     let unit: LearningUnit
     let unitIndex: Int
+    let sectionNumber: Int
+    let startsTopicBlock: Bool
     let course: LanguageCourse
     let allUnits: [LearningUnit]
     let allPhrases: [PhraseEntry]
@@ -13,6 +15,10 @@ struct UnitSectionView: View {
 
     var body: some View {
         VStack(spacing: 22) {
+            if startsTopicBlock {
+                topicHeader
+            }
+
             unitBanner
 
             VStack(spacing: 24) {
@@ -49,6 +55,30 @@ struct UnitSectionView: View {
         }
     }
 
+    private var topicHeader: some View {
+        HStack(spacing: 12) {
+            Image(systemName: unit.topicIcon)
+                .font(.headline.weight(.black))
+                .foregroundStyle(topicAccent)
+                .frame(width: 38, height: 38)
+                .background(topicAccent.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("SECTION \(sectionNumber)")
+                    .font(.caption2.weight(.black))
+                    .tracking(1.2)
+                    .foregroundStyle(Color.lingoMuted)
+                Text(unit.topicTitle)
+                    .font(.title3.weight(.black))
+                    .foregroundStyle(Color.lingoInk)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, sectionNumber == 1 ? 0 : 10)
+    }
+
     private var unitBanner: some View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 5) {
@@ -64,13 +94,22 @@ struct UnitSectionView: View {
                     .foregroundStyle(.white.opacity(0.85))
             }
             Spacer(minLength: 8)
-            Image(systemName: "bubble.left.and.bubble.right.fill")
+            Image(systemName: unit.topicIcon)
                 .font(.title2)
                 .foregroundStyle(.white.opacity(0.92))
         }
         .padding(18)
-        .background(course == .french ? Color.lingoBlue : Color.lingoGreen)
+        .background(topicAccent)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var topicAccent: Color {
+        switch unit.topicID {
+        case "clothes": return Color.lingoPurple
+        case "places": return Color.lingoOrange
+        case "opinions": return course == .french ? Color.lingoBlue : Color.lingoGreen
+        default: return Color.lingoBlue
+        }
     }
 
     private func isUnlocked(nodeIndex: Int) -> Bool {

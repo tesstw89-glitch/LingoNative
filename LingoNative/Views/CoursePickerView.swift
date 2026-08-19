@@ -15,7 +15,7 @@ struct CoursePickerView: View {
                     Text("What are we practising?")
                         .font(.largeTitle.weight(.black))
                         .foregroundStyle(Color.lingoInk)
-                    Text("Opinions & Reactions")
+                    Text("Your everyday language course")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.lingoMuted)
                 }
@@ -72,7 +72,7 @@ private struct CourseCard: View {
                 Text(course.title)
                     .font(.title2.weight(.black))
                     .foregroundStyle(.white)
-                Text("Opinions & Reactions")
+                Text("Rotating real-life topics")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.white.opacity(0.9))
             }

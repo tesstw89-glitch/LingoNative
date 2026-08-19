@@ -6,8 +6,10 @@ struct Lemma: Codable, Hashable, Identifiable {
     let english: String
 }
 
-struct PhraseEntry: Codable, Identifiable, Hashable {
-    let id: Int
+struct PhraseEntry: Identifiable, Hashable {
+    let id: String
+    let topicID: String
+    let topicTitle: String
     let foreign: String
     let english: String
     let lemmas: [Lemma]
@@ -55,9 +57,20 @@ enum LanguageCourse: String, CaseIterable, Identifiable, Hashable, Codable {
     }
 }
 
+struct LearningTopic: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let icon: String
+    let phraseCount: Int
+    let unitCount: Int
+}
+
 struct LearningUnit: Identifiable, Hashable {
     let id: String
     let title: String
+    let topicID: String
+    let topicTitle: String
+    let topicIcon: String
     let phrases: [PhraseEntry]
 
     func nodes(sessionSize: Int = 10) -> [LessonNode] {
@@ -85,6 +98,8 @@ struct Corpus {
     let course: LanguageCourse
     let entries: [PhraseEntry]
     let units: [LearningUnit]
+    let topics: [LearningTopic]
+    let blockSize: Int
 }
 
 enum QuestionDirection: String, Codable, CaseIterable, Equatable {
@@ -191,7 +206,7 @@ struct QuizSession {
         QuizSession(
             course: course,
             title: unit.title,
-            subtitle: "Lesson \(node.index + 1)",
+            subtitle: "\(unit.topicTitle) · Lesson \(node.index + 1)",
             phrasePool: unit.phrases,
             allPhrases: allPhrases,
             sessionSize: node.sessionSize,

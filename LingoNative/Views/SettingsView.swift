@@ -58,7 +58,7 @@ struct SettingsView: View {
 
             Section("Course") {
                 LabeledContent("Current language", value: "\(course.flag) \(course.title)")
-                LabeledContent("Content", value: "Opinions & Reactions")
+                LabeledContent("Content", value: "Rotating everyday topics")
                 LabeledContent("Storage", value: "On device")
             }
 

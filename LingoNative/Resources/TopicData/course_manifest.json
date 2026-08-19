@@ -1,0 +1,32 @@
+{
+  "blockSize": 8,
+  "topics": [
+    {
+      "id": "opinions",
+      "title": "Opinions & Reactions",
+      "icon": "bubble.left.and.bubble.right.fill",
+      "resources": {
+        "french": { "file": "french_opinions.json", "unitStrategy": "context" },
+        "spanish": { "file": "spanish_opinions.json", "unitStrategy": "context" }
+      }
+    },
+    {
+      "id": "clothes",
+      "title": "Clothes & Appearance",
+      "icon": "tshirt.fill",
+      "resources": {
+        "french": { "file": "french_clothes.json", "unitStrategy": "beforeEmDash" },
+        "spanish": { "file": "spanish_clothes.json", "unitStrategy": "afterEmDash" }
+      }
+    },
+    {
+      "id": "places",
+      "title": "Places",
+      "icon": "mappin.and.ellipse",
+      "resources": {
+        "french": { "file": "french_places.json", "unitStrategy": "firstSentence" },
+        "spanish": { "file": "spanish_places.json", "unitStrategy": "afterEmDash" }
+      }
+    }
+  ]
+}
