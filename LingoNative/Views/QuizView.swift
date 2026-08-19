@@ -382,6 +382,9 @@ struct QuizView: View {
     private func typingExercise(_ question: QuizQuestion) -> some View {
         TextField("Type your answer", text: $viewModel.typedAnswer, axis: .vertical)
             .font(.body.weight(.semibold))
+            .foregroundColor(Color.lingoInk)
+            .tint(Color.lingoBlue)
+            .environment(\.colorScheme, .light)
             .padding(16)
             .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -577,6 +580,9 @@ struct QuizView: View {
             if question.wordBankTokens.isEmpty {
                 TextField("Type what you hear", text: $viewModel.typedAnswer, axis: .vertical)
                     .font(.body.weight(.semibold))
+                    .foregroundColor(Color.lingoInk)
+                    .tint(Color.lingoBlue)
+                    .environment(\.colorScheme, .light)
                     .padding(16)
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
