@@ -204,6 +204,7 @@ enum QuizStatus: String, Codable, Equatable {
 struct SavedLessonSession: Codable, Equatable {
     let nodeID: String
     let course: LanguageCourse
+    let flowVersion: Int?
     let questions: [QuizQuestion]
     let currentIndex: Int
     let selectedAnswer: String?
