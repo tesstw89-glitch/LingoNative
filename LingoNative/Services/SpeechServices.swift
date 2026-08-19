@@ -163,9 +163,6 @@ final class SpeechRecognizerService: ObservableObject {
                     guard let self else { return }
                     if let result {
                         self.transcript = result.bestTranscription.formattedString
-                        if result.isFinal {
-                            self.stop()
-                        }
                     }
                     if let error {
                         if self.transcript.isEmpty {

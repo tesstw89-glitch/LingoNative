@@ -181,6 +181,21 @@ final class QuizViewModel: ObservableObject {
         guard status == .unanswered else { return }
         typedAnswer = transcript
     }
+    
+    func acceptSpeakingRecognition(
+        progressStore: ProgressStore,
+        settings: SettingsStore
+    ) {
+        guard let question = currentQuestion,
+              question.type == .speaking,
+              status == .unanswered else { return }
+
+        typedAnswer = question.correctAnswer
+        check(
+            progressStore: progressStore,
+            settings: settings
+        )
+    }
 
     func acknowledgeIntroduction(progressStore: ProgressStore) {
         guard let question = currentQuestion,

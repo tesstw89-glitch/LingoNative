@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import AVFoundation
+import Foundation
 
 struct QuizView: View {
     let session: QuizSession
@@ -15,6 +16,11 @@ struct QuizView: View {
     @State private var didRecordCompletion = false
     @State private var showExitConfirmation = false
     @FocusState private var answerFieldFocused: Bool
+    @State private var speakingRecognisedIndices: Set<Int> = []
+    @State private var speakingGraceSecondsLeft: Int?
+    @State private var speakingGraceTask: Task<Void, Never>?
+
+    private let speakingPassRatio: Double = 0.75
 
     init(session: QuizSession, progress: ProgressStore, settings: SettingsStore) {
         self.session = session
@@ -40,7 +46,10 @@ struct QuizView: View {
             } else if let question = viewModel.currentQuestion {
                 questionView(question)
                     .task(id: question.id) {
+                        cancelSpeakingGrace()
+                        speakingRecognisedIndices = []
                         speechRecognizer.stop()
+
                         if question.type == .listening && settings.autoplayAudio {
                             try? await Task.sleep(nanoseconds: 250_000_000)
                             speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
@@ -92,10 +101,19 @@ struct QuizView: View {
             viewModel.persistSnapshot(to: progress)
         }
         .onChange(of: speechRecognizer.transcript) { _, transcript in
-            if viewModel.currentQuestion?.type == .speaking {
-                viewModel.useTranscript(transcript)
-                viewModel.persistSnapshot(to: progress)
+            guard let question = viewModel.currentQuestion,
+                  question.type == .speaking else { return }
+
+            viewModel.useTranscript(transcript)
+
+            if session.completionNodeID != nil {
+                handleSpeakingTranscript(
+                    transcript,
+                    question: question
+                )
             }
+
+            viewModel.persistSnapshot(to: progress)
         }
         .onChange(of: viewModel.selectedAnswer) { _, _ in
             viewModel.persistSnapshot(to: progress)
@@ -382,6 +400,9 @@ struct QuizView: View {
     private func typingExercise(_ question: QuizQuestion) -> some View {
         TextField("Type your answer", text: $viewModel.typedAnswer, axis: .vertical)
             .font(.body.weight(.semibold))
+            .foregroundColor(Color.lingoInk)
+            .tint(Color.lingoBlue)
+            .environment(\.colorScheme, .light)
             .padding(16)
             .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -577,6 +598,9 @@ struct QuizView: View {
             if question.wordBankTokens.isEmpty {
                 TextField("Type what you hear", text: $viewModel.typedAnswer, axis: .vertical)
                     .font(.body.weight(.semibold))
+                    .foregroundColor(Color.lingoInk)
+                    .tint(Color.lingoBlue)
+                    .environment(\.colorScheme, .light)
                     .padding(16)
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -596,10 +620,17 @@ struct QuizView: View {
     }
 
     private func speakingExercise(_ question: QuizQuestion) -> some View {
-        VStack(spacing: 16) {
+        let visibleWords = cleanedSpeakingText(question.phrase.foreign)
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+
+        let graceActive = speakingGraceSecondsLeft != nil
+
+        return VStack(spacing: 16) {
             TokenFlowLayout(spacing: 8) {
-                ForEach(Array(question.phrase.foreign.split(whereSeparator: { $0.isWhitespace }).map(String.init).enumerated()), id: \.offset) { _, word in
-                    let recognised = speakingWordIsRecognised(word)
+                ForEach(Array(visibleWords.enumerated()), id: \.offset) { index, word in
+                    let recognised = speakingRecognisedIndices.contains(index)
+
                     Text(word)
                         .font(.system(size: 21, weight: .bold, design: .rounded))
                         .foregroundStyle(recognised ? Color.lingoPurple : Color.lingoInk)
@@ -638,74 +669,241 @@ struct QuizView: View {
                     .foregroundStyle(Color.lingoPurple)
             }
 
-            if let error = speechRecognizer.errorMessage {
+            // Exactly like the working standalone speaking drill:
+            // this becomes 10 immediately when 75% is reached.
+            if let seconds = speakingGraceSecondsLeft {
+                Text("Keep going… \(seconds)s")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Color.lingoOrange)
+            }
+
+            if let error = speechRecognizer.errorMessage,
+               speechRecognizer.isRecording {
                 Text(error)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.lingoWrong)
                     .multilineTextAlignment(.center)
             }
 
+            HStack(spacing: 12) {
+                Button {
+                    prepareForSpeakingPlayback()
+                    speaker.speak(
+                        question.phrase.foreign,
+                        course: session.course,
+                        rate: settings.speechRate
+                    )
+                } label: {
+                    Label("Hear it", systemImage: "speaker.wave.2.fill")
+                        .font(.subheadline.weight(.black))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(DuoButtonStyle(
+                    fill: Color.lingoBlue,
+                    shadow: Color.lingoBlue.opacity(0.65)
+                ))
+                .disabled(viewModel.status != .unanswered)
+
+                Button {
+                    skipSpeakingAsCorrect()
+                } label: {
+                    Text("SKIP")
+                        .font(.subheadline.weight(.black))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(DuoButtonStyle(
+                    fill: Color(.systemGray3),
+                    shadow: Color(.systemGray4)
+                ))
+                .disabled(viewModel.status != .unanswered)
+            }
+
             Button {
-                if speechRecognizer.isRecording {
-                    speechRecognizer.stop()
-                } else {
-                    Task {
-                        await speechRecognizer.start(localeIdentifier: session.course.speechLocaleIdentifier)
+                if graceActive {
+                    // PracticeHub does this too: if iOS ends the current
+                    // recognition window during grace, KEEP GOING restarts it
+                    // without losing the words already recognised.
+                    if !speechRecognizer.isRecording {
+                        beginSpeakingListening()
                     }
+                } else {
+                    beginSpeakingListening()
                 }
             } label: {
                 HStack(spacing: 9) {
-                    Image(systemName: speechRecognizer.isRecording ? "stop.fill" : "mic.fill")
-                    Text(speechRecognizer.isRecording ? "STOP" : "SPEAK")
+                    if !graceActive {
+                        Image(systemName: "mic.fill")
+                    }
+                    Text(graceActive ? "KEEP GOING…" : "SPEAK")
                 }
                 .font(.headline.weight(.black))
-                .foregroundStyle(Color.lingoPurple)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.lingoPurple.opacity(0.07))
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.lingoPurple.opacity(0.48), lineWidth: 2)
-                }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DuoButtonStyle(
+                fill: graceActive ? Color.lingoOrange : Color.lingoPurple,
+                shadow: graceActive
+                    ? Color.lingoOrange.opacity(0.65)
+                    : Color.lingoPurple.opacity(0.65)
+            ))
             .disabled(viewModel.status != .unanswered)
-
-            Button {
-                speechRecognizer.stop()
-                speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
-            } label: {
-                Label("Hear it", systemImage: "speaker.wave.2.fill")
-                    .font(.subheadline.weight(.black))
-                    .foregroundStyle(Color.lingoBlue)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.lingoBlue.opacity(0.06))
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.lingoBlue.opacity(0.38), lineWidth: 2)
-                    }
-            }
-            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func speakingWordIsRecognised(_ word: String) -> Bool {
-        let heard = Set(speechWords(from: viewModel.typedAnswer))
-        let target = speechWords(from: word)
-        return !target.isEmpty && target.allSatisfy { heard.contains($0) }
+    // MARK: - Speaking recognition
+
+    private func beginSpeakingListening() {
+        speaker.stop()
+        Task {
+            await speechRecognizer.start(
+                localeIdentifier: session.course.speechLocaleIdentifier
+            )
+        }
     }
 
-    private func speechWords(from text: String) -> [String] {
-        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+    /// Same matching flow as the working standalone speaking drill in
+    /// PracticeHubView: cumulative recognised indices, language-specific stop
+    /// words, 75% threshold, and an immediate 10-second visible grace state.
+    private func handleSpeakingTranscript(
+        _ raw: String,
+        question: QuizQuestion
+    ) {
+        guard viewModel.status == .unanswered else { return }
+
+        let canonical = LessonPracticeTextNormalizer.alignedTokens(
+            cleanedSpeakingText(question.phrase.foreign),
+            course: session.course
+        )
+
+        let heard = LessonPracticeTextNormalizer.transcriptTokenSet(
+            raw,
+            course: session.course
+        )
+
+        var updated = speakingRecognisedIndices
+
+        for (index, token) in canonical.enumerated() where !token.isEmpty {
+            if heard.contains(token) {
+                updated.insert(index)
+            }
+        }
+
+        // Recognition is cumulative: once a word lights up it stays lit.
+        speakingRecognisedIndices = updated
+
+        let important = LessonPracticeTextNormalizer.importantIndices(
+            canonical,
+            course: session.course
+        )
+
+        // Exact PracticeHub fallback if every token is a stop word.
+        let denominator = important.isEmpty
+            ? canonical.indices.filter { !canonical[$0].isEmpty }
+            : important
+
+        guard !denominator.isEmpty else { return }
+
+        let heardImportant = denominator.filter {
+            speakingRecognisedIndices.contains($0)
+        }.count
+
+        let ratio = Double(heardImportant) / Double(denominator.count)
+
+        // All required words: correct immediately.
+        if heardImportant == denominator.count {
+            finishSpeakingRecognition()
+            return
+        }
+
+        // As soon as 75% is hit, beginSpeakingGrace() synchronously sets
+        // speakingGraceSecondsLeft to 10, so "Keep going… 10s" appears at once.
+        if ratio >= speakingPassRatio,
+           speakingGraceSecondsLeft == nil {
+            beginSpeakingGrace()
+        }
+    }
+
+    private func beginSpeakingGrace() {
+        speakingGraceSecondsLeft = 10
+
+        speakingGraceTask?.cancel()
+        speakingGraceTask = Task { @MainActor in
+            for remaining in stride(from: 9, through: 0, by: -1) {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled else { return }
+                speakingGraceSecondsLeft = remaining
+            }
+
+            guard !Task.isCancelled,
+                  let question = viewModel.currentQuestion,
+                  question.type == .speaking,
+                  viewModel.status == .unanswered,
+                  session.completionNodeID != nil else {
+                speakingGraceTask = nil
+                speakingGraceSecondsLeft = nil
+                return
+            }
+
+            // If the ten seconds expire, accept it as correct anyway.
+            speechRecognizer.stop()
+            viewModel.acceptSpeakingRecognition(
+                progressStore: progress,
+                settings: settings
+            )
+
+            speakingGraceTask = nil
+            speakingGraceSecondsLeft = nil
+        }
+    }
+
+    private func finishSpeakingRecognition() {
+        guard viewModel.status == .unanswered else { return }
+
+        cancelSpeakingGrace()
+        speechRecognizer.stop()
+
+        viewModel.acceptSpeakingRecognition(
+            progressStore: progress,
+            settings: settings
+        )
+    }
+
+    private func skipSpeakingAsCorrect() {
+        guard viewModel.status == .unanswered else { return }
+
+        cancelSpeakingGrace()
+        speechRecognizer.stop()
+
+        // Deliberately count SKIP as correct in the main learning units.
+        viewModel.acceptSpeakingRecognition(
+            progressStore: progress,
+            settings: settings
+        )
+    }
+
+    private func prepareForSpeakingPlayback() {
+        speechRecognizer.stop()
+        cancelSpeakingGrace()
+    }
+
+    private func cancelSpeakingGrace() {
+        speakingGraceTask?.cancel()
+        speakingGraceTask = nil
+        speakingGraceSecondsLeft = nil
+    }
+
+    private func cleanedSpeakingText(_ text: String) -> String {
+        var output = SpeechSynthesizer.stripParentheses(text)
+            .replacingOccurrences(of: "’", with: "'")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        output = output.replacingOccurrences(
+            of: "\\s+",
+            with: " ",
+            options: .regularExpression
+        )
+
+        return output
     }
 
     @ViewBuilder
@@ -792,11 +990,23 @@ struct QuizView: View {
                     RemoteSVGView(url: CloneVisualAsset.mascot.url)
                         .frame(width: 50, height: 50)
                         .accessibilityHidden(true)
-                    Text(question.type == .introduction ? "Phrase introduced!" : "Nicely done!")
-                        .font(.headline.weight(.black))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(question.type == .introduction ? "Phrase introduced!" : "Nicely done!")
+                            .font(.headline.weight(.black))
+
+                        Text(question.phrase.english)
+                            .font(.subheadline)
+                    }
+
                     Spacer()
+
                     Button {
-                        speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
+                        speaker.speak(
+                            question.phrase.foreign,
+                            course: session.course,
+                            rate: settings.speechRate
+                        )
                     } label: {
                         Image(systemName: "speaker.wave.2.fill")
                             .font(.title3)
@@ -804,18 +1014,22 @@ struct QuizView: View {
                     .buttonStyle(.plain)
                 }
                 .foregroundStyle(Color.lingoGreenDark)
+
             } else if viewModel.status == .wrong {
                 HStack(alignment: .top, spacing: 12) {
                     RemoteSVGView(url: CloneVisualAsset.mascotBad.url)
                         .frame(width: 50, height: 50)
                         .accessibilityHidden(true)
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Not quite")
                             .font(.headline.weight(.black))
+
                         Text("Correct answer: \(question.correctAnswer)")
                             .font(.subheadline.weight(.bold))
                             .fixedSize(horizontal: false, vertical: true)
                     }
+
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -823,28 +1037,51 @@ struct QuizView: View {
             }
 
             if viewModel.status == .unanswered {
-                Button(question.type == .introduction ? "GOT IT" : "CHECK") {
-                    speechRecognizer.stop()
-                    answerFieldFocused = false
-                    if question.type == .introduction {
-                        viewModel.acknowledgeIntroduction(progressStore: progress)
-                    } else {
-                        viewModel.check(progressStore: progress, settings: settings)
+
+                // Main-unit speaking exercises complete automatically,
+                // so they do not need a CHECK button.
+                if !(question.type == .speaking && session.completionNodeID != nil) {
+
+                    Button(question.type == .introduction ? "GOT IT" : "CHECK") {
+                        speechRecognizer.stop()
+                        answerFieldFocused = false
+
+                        if question.type == .introduction {
+                            viewModel.acknowledgeIntroduction(
+                                progressStore: progress
+                            )
+                        } else {
+                            viewModel.check(
+                                progressStore: progress,
+                                settings: settings
+                            )
+                        }
                     }
+                    .buttonStyle(DuoButtonStyle(
+                        fill: viewModel.responseIsReady
+                            ? Color.lingoGreen
+                            : Color(.systemGray4),
+                        shadow: viewModel.responseIsReady
+                            ? Color.lingoGreenDark
+                            : Color(.systemGray3)
+                    ))
+                    .disabled(!viewModel.responseIsReady)
                 }
-                .buttonStyle(DuoButtonStyle(
-                    fill: viewModel.responseIsReady ? Color.lingoGreen : Color(.systemGray4),
-                    shadow: viewModel.responseIsReady ? Color.lingoGreenDark : Color(.systemGray3)
-                ))
-                .disabled(!viewModel.responseIsReady)
+
             } else {
+
                 Button(viewModel.status == .wrong ? "CONTINUE" : "NEXT") {
+                    cancelSpeakingGrace()
                     speechRecognizer.stop()
                     viewModel.continueAfterFeedback(progressStore: progress)
                 }
                 .buttonStyle(DuoButtonStyle(
-                    fill: viewModel.status == .correct ? Color.lingoGreen : Color.lingoWrong,
-                    shadow: viewModel.status == .correct ? Color.lingoGreenDark : Color(red: 0.73, green: 0.20, blue: 0.20)
+                    fill: viewModel.status == .correct
+                        ? Color.lingoGreen
+                        : Color.lingoWrong,
+                    shadow: viewModel.status == .correct
+                        ? Color.lingoGreenDark
+                        : Color(red: 0.73, green: 0.20, blue: 0.20)
                 ))
             }
         }
@@ -1011,6 +1248,95 @@ struct QuizView: View {
         } else {
             progress.recordPracticeSession(earnedXP: viewModel.earnedXP, restoreHeart: settings.heartsEnabled)
         }
+    }
+}
+
+// MARK: - LanguageTrainer-style speaking normalizer
+
+/// Same core normalisation as the working standalone speaking exercise in
+/// PracticeHubView, including separate French and Spanish stop-word lists.
+private enum LessonPracticeTextNormalizer {
+    private static let frenchStopWords: Set<String> = [
+        "je", "j", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
+        "le", "la", "les", "un", "une", "des", "du", "de", "d", "ce", "cet", "cette", "ces",
+        "et", "ou", "mais", "que", "qui", "ne", "n", "pas", "y", "en", "mon", "ton", "son",
+        "notre", "votre", "leur", "leurs", "au", "aux"
+    ]
+
+    private static let spanishStopWords: Set<String> = [
+        "yo", "tu", "el", "ella", "nosotros", "nosotras", "vosotros", "vosotras", "ellos", "ellas",
+        "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "a", "al", "en", "y", "o",
+        "pero", "que", "lo", "se", "me", "te", "nos", "os", "mi", "su", "sus", "por", "para"
+    ]
+
+    static func alignedTokens(
+        _ sentence: String,
+        course: LanguageCourse
+    ) -> [String] {
+        sentence
+            .split(whereSeparator: { $0.isWhitespace })
+            .map { canonicalToken(String($0), course: course) }
+    }
+
+    static func transcriptTokenSet(
+        _ transcript: String,
+        course: LanguageCourse
+    ) -> Set<String> {
+        Set(
+            transcript
+                .replacingOccurrences(of: "’", with: "'")
+                .split(whereSeparator: { $0.isWhitespace })
+                .map { canonicalToken(String($0), course: course) }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    static func importantIndices(
+        _ tokens: [String],
+        course: LanguageCourse
+    ) -> [Int] {
+        let stopWords = course == .french
+            ? frenchStopWords
+            : spanishStopWords
+
+        return tokens.enumerated().compactMap { index, token in
+            guard !token.isEmpty else { return nil }
+            return stopWords.contains(token) ? nil : index
+        }
+    }
+
+    private static func canonicalToken(
+        _ raw: String,
+        course: LanguageCourse
+    ) -> String {
+        var value = raw
+            .lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current)
+            .replacingOccurrences(of: "’", with: "'")
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(
+                of: "[^a-z0-9]",
+                with: "",
+                options: .regularExpression
+            )
+
+        if course == .french {
+            let homophones = [
+                "aux": "au",
+                "ont": "on",
+                "peux": "peu",
+                "peut": "peu",
+                "sont": "son",
+                "sans": "sang",
+                "vingt": "vin"
+            ]
+
+            if let mapped = homophones[value] {
+                value = mapped
+            }
+        }
+
+        return value
     }
 }
 
