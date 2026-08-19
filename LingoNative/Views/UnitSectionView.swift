@@ -39,7 +39,7 @@ struct UnitSectionView: View {
                         if unlocked || completed {
                             NavigationLink {
                                 QuizView(
-                                    session: .lesson(
+                                    session: .similarityAwareLesson(
                                         course: course,
                                         unit: unit,
                                         node: node,
@@ -123,7 +123,7 @@ struct UnitSectionView: View {
             if let activeNodeInUnit {
                 NavigationLink {
                     QuizView(
-                        session: .lesson(
+                        session: .similarityAwareLesson(
                             course: course,
                             unit: unit,
                             node: activeNodeInUnit,
@@ -180,5 +180,168 @@ struct UnitSectionView: View {
         let previousUnit = allUnits[unitIndex - 1]
         guard let lastNode = previousUnit.nodes().last else { return true }
         return progress.isCompleted(lastNode.id)
+    }
+}
+
+private extension QuizSession {
+    static func similarityAwareLesson(
+        course: LanguageCourse,
+        unit: LearningUnit,
+        node: LessonNode,
+        allPhrases: [PhraseEntry],
+        exerciseTypes: Set<ExerciseType>
+    ) -> QuizSession {
+        let nodePhrases = SimilarityAwareLessonDealer.phrases(in: unit, for: node)
+        return QuizSession(
+            course: course,
+            title: unit.title,
+            subtitle: "\(unit.topicTitle) · Lesson \(node.index + 1)",
+            phrasePool: nodePhrases,
+            allPhrases: allPhrases,
+            sessionSize: max(1, nodePhrases.count),
+            exerciseTypes: exerciseTypes,
+            completionNodeID: node.id
+        )
+    }
+}
+
+/// Deals each unit's phrases across its lessons instead of slicing the source file into
+/// consecutive blocks. This keeps the unit/subheading intact while separating near-duplicate
+/// wording and translation families wherever the number of lessons allows it.
+private enum SimilarityAwareLessonDealer {
+    private struct TextFingerprint {
+        let normalized: String
+        let tokens: Set<String>
+        let bigrams: Set<String>
+    }
+
+    private struct PhraseFingerprint {
+        let foreign: TextFingerprint
+        let english: TextFingerprint
+    }
+
+    static func phrases(in unit: LearningUnit, for node: LessonNode) -> [PhraseEntry] {
+        let buckets = deal(unit.phrases, sessionSize: max(1, node.sessionSize))
+        guard buckets.indices.contains(node.index) else { return [] }
+        return buckets[node.index]
+    }
+
+    private static func deal(_ phrases: [PhraseEntry], sessionSize: Int) -> [[PhraseEntry]] {
+        guard !phrases.isEmpty else { return [] }
+
+        let lessonCount = max(1, Int(ceil(Double(phrases.count) / Double(sessionSize))))
+        guard lessonCount > 1 else { return [phrases] }
+
+        let baseCapacity = phrases.count / lessonCount
+        let remainder = phrases.count % lessonCount
+        let capacities = (0..<lessonCount).map { index in
+            baseCapacity + (index < remainder ? 1 : 0)
+        }
+
+        let fingerprints = phrases.map {
+            PhraseFingerprint(
+                foreign: fingerprint($0.foreign),
+                english: fingerprint($0.english)
+            )
+        }
+
+        var buckets = Array(repeating: [PhraseEntry](), count: lessonCount)
+        var bucketIndices = Array(repeating: [Int](), count: lessonCount)
+
+        for phraseIndex in phrases.indices {
+            var bestBucket: Int?
+            var bestScore = Double.greatestFiniteMagnitude
+
+            for bucketIndex in 0..<lessonCount where buckets[bucketIndex].count < capacities[bucketIndex] {
+                let maxSimilarity = bucketIndices[bucketIndex]
+                    .map { existingIndex in
+                        phraseSimilarity(fingerprints[phraseIndex], fingerprints[existingIndex])
+                    }
+                    .max() ?? 0
+
+                // Only strong resemblance should outweigh ordinary card-dealing balance.
+                // This avoids treating common little words as a "duplicate family".
+                let duplicatePenalty = max(0, maxSimilarity - 0.52) * 100.0
+                let fillRatio = capacities[bucketIndex] > 0
+                    ? Double(buckets[bucketIndex].count) / Double(capacities[bucketIndex])
+                    : 1.0
+                let score = duplicatePenalty + fillRatio * 3.0 + Double(bucketIndex) * 0.000_001
+
+                if score < bestScore {
+                    bestScore = score
+                    bestBucket = bucketIndex
+                }
+            }
+
+            if let bestBucket {
+                buckets[bestBucket].append(phrases[phraseIndex])
+                bucketIndices[bestBucket].append(phraseIndex)
+            }
+        }
+
+        return buckets
+    }
+
+    private static func phraseSimilarity(_ lhs: PhraseFingerprint, _ rhs: PhraseFingerprint) -> Double {
+        max(
+            textSimilarity(lhs.foreign, rhs.foreign),
+            textSimilarity(lhs.english, rhs.english)
+        )
+    }
+
+    private static func textSimilarity(_ lhs: TextFingerprint, _ rhs: TextFingerprint) -> Double {
+        guard !lhs.normalized.isEmpty, !rhs.normalized.isEmpty else { return 0 }
+        if lhs.normalized == rhs.normalized { return 1 }
+
+        let tokenIntersection = lhs.tokens.intersection(rhs.tokens).count
+        let minimumTokenCount = min(lhs.tokens.count, rhs.tokens.count)
+        let tokenUnion = lhs.tokens.union(rhs.tokens).count
+
+        let containment = minimumTokenCount > 0
+            ? Double(tokenIntersection) / Double(minimumTokenCount)
+            : 0
+        let jaccard = tokenUnion > 0
+            ? Double(tokenIntersection) / Double(tokenUnion)
+            : 0
+        let tokenScore = containment * 0.75 + jaccard * 0.25
+
+        let bigramIntersection = lhs.bigrams.intersection(rhs.bigrams).count
+        let bigramDenominator = lhs.bigrams.count + rhs.bigrams.count
+        let dice = bigramDenominator > 0
+            ? (2.0 * Double(bigramIntersection)) / Double(bigramDenominator)
+            : 0
+
+        return max(tokenScore, dice * 0.9)
+    }
+
+    private static func fingerprint(_ text: String) -> TextFingerprint {
+        let folded = text.folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: Locale(identifier: "en_US_POSIX")
+        )
+        let words = folded
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { word in
+                let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.count > 1 || trimmed.allSatisfy(\.isNumber)
+            }
+        let normalized = words.joined(separator: " ")
+        let compact = normalized.replacingOccurrences(of: " ", with: "")
+        let characters = Array(compact)
+
+        var bigrams = Set<String>()
+        if characters.count >= 2 {
+            for index in 0..<(characters.count - 1) {
+                bigrams.insert(String(characters[index...index + 1]))
+            }
+        } else if !compact.isEmpty {
+            bigrams.insert(compact)
+        }
+
+        return TextFingerprint(
+            normalized: normalized,
+            tokens: Set(words),
+            bigrams: bigrams
+        )
     }
 }
