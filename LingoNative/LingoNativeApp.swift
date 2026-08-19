@@ -8,7 +8,7 @@ struct LingoNativeApp: App {
 
     init() {
         let defaults = UserDefaults.standard
-        let resetMarker = "learningEngineReset.2026-08-19.v1"
+        let resetMarker = "learningEngineReset.2026-08-19.v2"
 
         if !defaults.bool(forKey: resetMarker) {
             [
@@ -18,7 +18,9 @@ struct LingoNativeApp: App {
                 "phraseProgress.v2",
                 "bookmarkedPhraseKeys",
                 "dailyActivity.v2",
-                "savedLessonSessions.v1"
+                "savedLessonSessions.v1",
+                "learningAttempts.v1",
+                "adaptiveLearnerModels.v1"
             ].forEach { defaults.removeObject(forKey: $0) }
 
             defaults.set(true, forKey: resetMarker)
