@@ -15,11 +15,28 @@ final class QuizViewModel: ObservableObject {
     let session: QuizSession
     private let initialQuestionCount: Int
 
-    init(session: QuizSession) {
+    init(session: QuizSession, savedSession: SavedLessonSession? = nil) {
         self.session = session
-        let generated = Self.makeQuestions(session: session)
-        self.questions = generated
-        self.initialQuestionCount = generated.count
+
+        if let savedSession,
+           let nodeID = session.completionNodeID,
+           savedSession.nodeID == nodeID,
+           savedSession.course == session.course,
+           !savedSession.questions.isEmpty {
+            questions = savedSession.questions
+            currentIndex = min(savedSession.currentIndex, savedSession.questions.count)
+            selectedAnswer = savedSession.selectedAnswer
+            typedAnswer = savedSession.typedAnswer
+            selectedWordIndices = savedSession.selectedWordIndices
+            status = savedSession.status
+            mistakes = savedSession.mistakes
+            correctCount = savedSession.correctCount
+            initialQuestionCount = max(1, savedSession.initialQuestionCount)
+        } else {
+            let generated = Self.makeQuestions(session: session)
+            questions = generated
+            initialQuestionCount = generated.count
+        }
     }
 
     var currentQuestion: QuizQuestion? {
@@ -58,6 +75,29 @@ final class QuizViewModel: ObservableObject {
             guard question.wordBankTokens.indices.contains(index) else { return nil }
             return question.wordBankTokens[index]
         }.joined(separator: " ")
+    }
+
+    func snapshot() -> SavedLessonSession? {
+        guard let nodeID = session.completionNodeID else { return nil }
+        return SavedLessonSession(
+            nodeID: nodeID,
+            course: session.course,
+            questions: questions,
+            currentIndex: currentIndex,
+            selectedAnswer: selectedAnswer,
+            typedAnswer: typedAnswer,
+            selectedWordIndices: selectedWordIndices,
+            status: status,
+            mistakes: mistakes,
+            correctCount: correctCount,
+            initialQuestionCount: initialQuestionCount,
+            updatedAt: Date()
+        )
+    }
+
+    func persistSnapshot(to progressStore: ProgressStore) {
+        guard let snapshot = snapshot() else { return }
+        progressStore.saveLessonSession(snapshot)
     }
 
     func select(_ answer: String) {
@@ -109,13 +149,15 @@ final class QuizViewModel: ObservableObject {
         } else {
             mistakes += 1
             status = .wrong
-            if settings.heartsEnabled {
+            if settings.heartsEnabled && session.completionNodeID != nil {
                 progressStore.loseHeart()
             }
         }
+
+        persistSnapshot(to: progressStore)
     }
 
-    func continueAfterFeedback() {
+    func continueAfterFeedback(progressStore: ProgressStore) {
         guard let question = currentQuestion else { return }
 
         if status == .wrong {
@@ -125,6 +167,7 @@ final class QuizViewModel: ObservableObject {
         if status != .unanswered {
             currentIndex += 1
             resetResponse()
+            persistSnapshot(to: progressStore)
         }
     }
 
