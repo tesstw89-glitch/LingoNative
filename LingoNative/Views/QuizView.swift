@@ -1043,7 +1043,7 @@ private enum CloneVisualAsset: String {
 }
 
 private func cloneAssetURL(_ filename: String) -> URL {
-    URL(string: "https://raw.githubusercontent.com/sanidhyy/duolingo-clone/268221c205148c07bfb22f9adf3b46bdcd048d9c670db70d8/public/\(filename)")!
+    URL(string: "https://raw.githubusercontent.com/sanidhyy/duolingo-clone/268221c205148c07bfb22f9adf3b46bdcd048d9a/public/\(filename)")!
 }
 
 private struct RemoteSVGView: UIViewRepresentable {
