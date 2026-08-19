@@ -1,0 +1,1 @@
+Temporary marker to trigger Xcode validation for the topic-rotation architecture.
