@@ -6,6 +6,7 @@ final class SettingsStore: ObservableObject {
     @Published var heartsEnabled: Bool { didSet { save() } }
     @Published var autoplayAudio: Bool { didSet { save() } }
     @Published var hapticsEnabled: Bool { didSet { save() } }
+    @Published var soundEffectsEnabled: Bool { didSet { save() } }
     @Published var showLemmaHints: Bool { didSet { save() } }
     @Published var dailyGoalXP: Int { didSet { save() } }
     @Published var speechRate: Double { didSet { save() } }
@@ -19,6 +20,7 @@ final class SettingsStore: ObservableObject {
         var heartsEnabled: Bool
         var autoplayAudio: Bool
         var hapticsEnabled: Bool
+        var soundEffectsEnabled: Bool?
         var showLemmaHints: Bool
         var dailyGoalXP: Int
         var speechRate: Double
@@ -34,6 +36,7 @@ final class SettingsStore: ObservableObject {
             heartsEnabled = payload.heartsEnabled
             autoplayAudio = payload.autoplayAudio
             hapticsEnabled = payload.hapticsEnabled
+            soundEffectsEnabled = payload.soundEffectsEnabled ?? true
             showLemmaHints = payload.showLemmaHints
             dailyGoalXP = payload.dailyGoalXP
             speechRate = payload.speechRate
@@ -43,6 +46,7 @@ final class SettingsStore: ObservableObject {
             heartsEnabled = true
             autoplayAudio = true
             hapticsEnabled = true
+            soundEffectsEnabled = true
             showLemmaHints = true
             dailyGoalXP = 50
             speechRate = 0.46
@@ -55,6 +59,7 @@ final class SettingsStore: ObservableObject {
         heartsEnabled = true
         autoplayAudio = true
         hapticsEnabled = true
+        soundEffectsEnabled = true
         showLemmaHints = true
         dailyGoalXP = 50
         speechRate = 0.46
@@ -77,6 +82,7 @@ final class SettingsStore: ObservableObject {
             heartsEnabled: heartsEnabled,
             autoplayAudio: autoplayAudio,
             hapticsEnabled: hapticsEnabled,
+            soundEffectsEnabled: soundEffectsEnabled,
             showLemmaHints: showLemmaHints,
             dailyGoalXP: dailyGoalXP,
             speechRate: speechRate,
