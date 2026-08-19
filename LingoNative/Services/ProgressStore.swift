@@ -196,11 +196,15 @@ final class ProgressStore: ObservableObject {
         direction: QuestionDirection,
         responseTimeSeconds: TimeInterval,
         correctParts: Int? = nil,
-        totalParts: Int = 1
+        totalParts: Int = 1,
+        isLessonScaffold: Bool = false
     ) {
         let key = phrase.progressKey(course: course)
         var stats = phraseProgress[key] ?? PhraseProgress()
         let now = Date()
+        let scaffoldSuccessesBefore = isLessonScaffold
+            ? lessonScaffoldSuccessCount(course: course, phrase: phrase)
+            : nil
 
         if stats.learningStage == .unseen {
             stats.learningStage = .introduced
@@ -246,7 +250,18 @@ final class ProgressStore: ObservableObject {
         }
 
         stats.seen += 1
-        if correct {
+        if let scaffoldSuccessesBefore {
+            // The four initial skills are peers, not a difficulty staircase. Their display order
+            // may be anything, so stage changes are based only on how many have been cleared.
+            stats.successfulRecallCount = scaffoldSuccessesBefore
+            if correct {
+                stats.correct += 1
+                advanceLessonScaffold(&stats)
+            } else {
+                stats.wrong += 1
+                preserveLessonScaffoldStage(&stats)
+            }
+        } else if correct {
             stats.correct += 1
             advanceLearningStage(&stats, after: exerciseType)
         } else {
@@ -255,17 +270,12 @@ final class ProgressStore: ObservableObject {
         }
         stats.lastReviewWasCorrect = correct
 
-        // Duolingo HLR models recall as p = 2^(-t/h). Their public repository trains
-        // feature weights on a very large trace dataset; LingoNative instead adapts each
-        // phrase's h online from the user's own successes/failures while using that same curve.
         let adjustedHalfLife: Double
         if correct {
-            // A correct answer that was unlikely is stronger evidence than an easy immediate repeat.
             let surprise = 1.0 - probabilityBeforeReview
             let growth = 1.35 + 1.65 * surprise
             adjustedHalfLife = previousHalfLife * growth
         } else {
-            // Failure shortens the interval substantially, then the stage system scaffolds the next test.
             let retentionFactor = max(0.28, 0.52 - 0.18 * probabilityBeforeReview)
             adjustedHalfLife = previousHalfLife * retentionFactor
         }
@@ -289,6 +299,37 @@ final class ProgressStore: ObservableObject {
 
     func learningStage(course: LanguageCourse, phrase: PhraseEntry) -> PhraseLearningStage {
         stats(course: course, phrase: phrase).learningStage
+    }
+
+    /// Number of the four mandatory active scaffold skills already cleared.
+    /// Existing progress is migrated from the previous fixed order. If a phrase reached free
+    /// writing before speaking became mandatory, it gets one speaking encounter to catch up.
+    func lessonScaffoldSuccessCount(course: LanguageCourse, phrase: PhraseEntry) -> Int {
+        let value = stats(course: course, phrase: phrase)
+        let inferred: Int
+        if let stored = value.successfulRecallCount {
+            inferred = max(0, stored)
+        } else {
+            switch value.learningStage {
+            case .unseen, .introduced: inferred = 0
+            case .recognition: inferred = 1
+            case .assistedRecall: inferred = 2
+            case .freeRecall, .established: inferred = 3
+            }
+        }
+
+        if inferred >= 4 {
+            let hasSuccessfulSpeaking = attemptHistory.contains { attempt in
+                attempt.course == course
+                    && attempt.phraseID == phrase.id
+                    && attempt.exerciseType == .speaking
+                    && attempt.wasCorrect
+            }
+            if !hasSuccessfulSpeaking {
+                return 3
+            }
+        }
+        return min(4, inferred)
     }
 
     func recallProbability(course: LanguageCourse, phrase: PhraseEntry, at date: Date = Date()) -> Double {
@@ -337,9 +378,9 @@ final class ProgressStore: ObservableObject {
                 guard !excludedKeys.contains(key) else { return false }
                 let value = stats(course: course, phrase: phrase)
                 guard value.learningStage != .unseen else { return false }
-                // Recognition is deliberately due immediately so the next encounter can
-                // move from visual token-building to the audio-only token build.
-                if value.learningStage == .recognition { return true }
+                if lessonScaffoldSuccessCount(course: course, phrase: phrase) < 4 {
+                    return true
+                }
                 return value.recallProbability(at: now) <= threshold || value.lastReviewWasCorrect == false
             }
             .sorted { lhs, rhs in
@@ -547,22 +588,56 @@ final class ProgressStore: ObservableObject {
         let forgetting = 1.0 - value.recallProbability(at: date)
         let recentFailureBoost = value.lastReviewWasCorrect == false ? 0.55 : 0
         let errorBoost = min(0.35, Double(value.wrong) * 0.035)
-        let tokenGateBoost = value.learningStage == .recognition ? 0.90 : 0
-        return forgetting + recentFailureBoost + errorBoost + tokenGateBoost
+        let scaffoldBoost = lessonScaffoldSuccessCount(course: course, phrase: phrase) < 4 ? 1.15 : 0
+        return forgetting + recentFailureBoost + errorBoost + scaffoldBoost
+    }
+
+    private func advanceLessonScaffold(_ stats: inout PhraseProgress) {
+        let wasEstablished = stats.learningStage == .established
+        let count = min(4, max(0, (stats.successfulRecallCount ?? 0) + 1))
+        stats.successfulRecallCount = count
+
+        if wasEstablished {
+            stats.learningStage = .established
+            return
+        }
+
+        switch count {
+        case 0:
+            stats.learningStage = .introduced
+        case 1:
+            stats.learningStage = .recognition
+        case 2, 3:
+            stats.learningStage = .assistedRecall
+        default:
+            stats.learningStage = .freeRecall
+        }
+    }
+
+    private func preserveLessonScaffoldStage(_ stats: inout PhraseProgress) {
+        if stats.learningStage == .established { return }
+        let count = min(4, max(0, stats.successfulRecallCount ?? 0))
+        switch count {
+        case 0:
+            stats.learningStage = .introduced
+        case 1:
+            stats.learningStage = .recognition
+        case 2, 3:
+            stats.learningStage = .assistedRecall
+        default:
+            stats.learningStage = .freeRecall
+        }
     }
 
     private func advanceLearningStage(_ stats: inout PhraseProgress, after type: ExerciseType) {
         switch type {
         case .introduction:
-            // Kept only for backwards-compatible saved data. New lessons do not generate reveals.
             if stats.learningStage == .unseen { stats.learningStage = .introduced }
 
         case .multipleChoice, .matching, .lemma:
             if stats.learningStage < .recognition { stats.learningStage = .recognition }
 
         case .wordBank:
-            // Both visual drag/drop and audio drag/drop are recorded as token construction.
-            // First success: visual build -> recognition. Second success: audio build -> assisted recall.
             stats.successfulRecallCount = (stats.successfulRecallCount ?? 0) + 1
             if stats.learningStage < .recognition {
                 stats.learningStage = .recognition
@@ -574,8 +649,6 @@ final class ProgressStore: ObservableObject {
             break
 
         case .listening:
-            // Listen-and-write is the third successful encounter in the new path. Only then
-            // does plain English -> target writing unlock.
             stats.successfulRecallCount = (stats.successfulRecallCount ?? 0) + 1
             if stats.learningStage == .assistedRecall {
                 if (stats.successfulRecallCount ?? 0) >= 3 {
@@ -601,13 +674,10 @@ final class ProgressStore: ObservableObject {
         case .unseen, .introduced:
             stats.learningStage = .introduced
         case .recognition:
-            // If audio-only token building fails, show the English prompt and rebuild visually.
             stats.learningStage = .introduced
         case .assistedRecall:
-            // If listen-and-write fails, return to audio + tokens.
             stats.learningStage = .recognition
         case .freeRecall:
-            // If plain writing fails, step back only one rung to listen-and-write.
             stats.learningStage = .assistedRecall
             stats.successfulRecallCount = max(0, (stats.successfulRecallCount ?? 0) - 1)
         case .established:
