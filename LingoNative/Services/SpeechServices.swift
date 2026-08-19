@@ -6,20 +6,98 @@ import SwiftUI
 final class SpeechSynthesizer: ObservableObject {
     private let synthesizer = AVSpeechSynthesizer()
 
-    func speak(_ text: String, course: LanguageCourse, rate: Double = 0.46) {
-        guard !text.isEmpty else { return }
+    func speak(_ text: String, course: LanguageCourse, rate: Double = 0.48, volume: Float = 1.0) {
+        let cleaned = Self.stripParentheses(text)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleaned.isEmpty else { return }
+
+        configureAudioSessionForTTS()
+
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: course.speechLocaleIdentifier)
+
+        let utterance = AVSpeechUtterance(string: cleaned)
+        utterance.voice = bestVoice(for: course.speechLocaleIdentifier)
         utterance.rate = Float(min(max(rate, 0.30), 0.60))
+        utterance.volume = max(0, min(volume, 1))
         utterance.pitchMultiplier = 1.0
+
         synthesizer.speak(utterance)
     }
 
     func stop() {
-        synthesizer.stopSpeaking(at: .immediate)
+        if synthesizer.isSpeaking {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+    }
+
+    private func bestVoice(for languageCode: String) -> AVSpeechSynthesisVoice? {
+        let prefix = languageCodePrefix(for: languageCode)
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix(prefix) }
+
+        // Prefer the requested regional locale when an upgraded voice exists.
+        if let exactPremium = voices.first(where: {
+            $0.language == languageCode && $0.quality == .premium
+        }) {
+            return exactPremium
+        }
+
+        if let exactEnhanced = voices.first(where: {
+            $0.language == languageCode && $0.quality == .enhanced
+        }) {
+            return exactEnhanced
+        }
+
+        // This mirrors LanguageTrainer's behaviour: use the best installed
+        // voice for the language before falling back to the system default.
+        if let premium = voices.first(where: { $0.quality == .premium }) {
+            return premium
+        }
+
+        if let enhanced = voices.first(where: { $0.quality == .enhanced }) {
+            return enhanced
+        }
+
+        return AVSpeechSynthesisVoice(language: languageCode) ?? voices.first
+    }
+
+    private func languageCodePrefix(for languageCode: String) -> String {
+        if languageCode.hasPrefix("fr") { return "fr" }
+        if languageCode.hasPrefix("es") { return "es" }
+        return languageCode
+    }
+
+    private func configureAudioSessionForTTS() {
+        let session = AVAudioSession.sharedInstance()
+
+        do {
+            try session.setCategory(
+                .playback,
+                mode: .spokenAudio,
+                options: [.duckOthers, .allowBluetooth, .mixWithOthers]
+            )
+            try session.setActive(true)
+        } catch {
+            print("⚠️ Audio session (TTS) error:", error.localizedDescription)
+        }
+    }
+
+    static func stripParentheses(_ text: String) -> String {
+        var output = text
+
+        while let start = output.firstIndex(of: "("),
+              let end = output[start...].firstIndex(of: ")") {
+            output.removeSubrange(start...end)
+        }
+
+        while output.contains("  ") {
+            output = output.replacingOccurrences(of: "  ", with: " ")
+        }
+
+        return output
     }
 }
 
