@@ -5,6 +5,7 @@ struct LearnPathView: View {
     @ObservedObject var progress: ProgressStore
     @ObservedObject var settings: SettingsStore
 
+    @Environment(\.dismiss) private var dismiss
     @State private var didAutoScroll = false
 
     var body: some View {
@@ -43,10 +44,26 @@ struct LearnPathView: View {
         }
         .navigationTitle("Learn")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(corpus.course.flag)
+                            .font(.title3)
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(Color.lingoMuted)
+                    }
+                }
+                .accessibilityLabel("Change language")
+            }
+
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 1) {
-                    Text("\(corpus.course.flag) \(corpus.course.title)")
+                    Text(corpus.course.title)
                         .font(.subheadline.weight(.black))
                     if let activeTopicTitle {
                         Text(activeTopicTitle)
