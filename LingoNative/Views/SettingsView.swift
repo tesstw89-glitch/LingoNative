@@ -19,6 +19,13 @@ struct SettingsView: View {
                 Stepper("Daily goal: \(settings.dailyGoalXP) XP", value: $settings.dailyGoalXP, in: 10...200, step: 10)
             }
 
+            Section("Appearance") {
+                Toggle("Dark mode", isOn: $settings.darkModeEnabled)
+                Text("Choose the app appearance independently from your iPhone's light or dark mode setting.")
+                    .font(.caption)
+                    .foregroundStyle(Color.lingoMuted)
+            }
+
             Section("Exercise mix") {
                 ForEach(ExerciseType.userSelectableCases) { type in
                     Toggle(isOn: binding(for: type)) {
