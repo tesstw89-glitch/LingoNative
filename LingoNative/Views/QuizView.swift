@@ -74,15 +74,18 @@ struct QuizView: View {
                         showExitConfirmation = true
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.headline.weight(.black))
+                            .font(.title3.weight(.black))
                             .foregroundStyle(Color.lingoMuted)
+                            .frame(width: 32, height: 32)
                     }
                 }
 
                 ToolbarItem(placement: .principal) {
-                    ProgressView(value: viewModel.progress)
-                        .tint(session.course == .french ? Color.lingoBlue : Color.lingoGreen)
-                        .frame(width: 170)
+                    LessonProgressBar(
+                        progress: viewModel.progress,
+                        tint: session.course == .french ? Color.lingoBlue : Color.lingoGreen
+                    )
+                    .frame(width: 214, height: 12)
                 }
 
                 if settings.heartsEnabled {
@@ -344,7 +347,7 @@ struct QuizView: View {
     }
 
     private func multipleChoiceExercise(_ question: QuizQuestion) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 13) {
             ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
                 answerRow(option: option, index: index, question: question)
             }
@@ -352,7 +355,7 @@ struct QuizView: View {
     }
 
     private func matchingExercise(_ question: QuizQuestion) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
             ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
                 let selected = viewModel.selectedAnswer == option
                 let isCorrect = QuizViewModel.answersMatch(option, question.correctAnswer)
@@ -369,25 +372,26 @@ struct QuizView: View {
                 Button {
                     viewModel.select(option)
                 } label: {
-                    VStack(spacing: 10) {
+                    VStack(spacing: 12) {
                         Text("\(index + 1)")
                             .font(.caption.weight(.black))
                             .foregroundStyle(selected ? .white : Color.lingoMuted)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 30, height: 30)
                             .background(selected ? Color.lingoBlue : Color(.systemGray6))
                             .clipShape(Circle())
+
                         Text(option)
-                            .font(.subheadline.weight(.bold))
+                            .font(.body.weight(.black))
                             .foregroundStyle(Color.lingoInk)
                             .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, minHeight: 72)
+                            .frame(maxWidth: .infinity, minHeight: 78)
                     }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, minHeight: 130)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, minHeight: 144)
                     .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .stroke(border, lineWidth: selected || viewModel.status != .unanswered ? 3 : 2)
                     }
                 }
@@ -576,7 +580,7 @@ struct QuizView: View {
     }
 
     private func listeningExercise(_ question: QuizQuestion) -> some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 22) {
             RemoteSVGView(url: character(for: question).url)
                 .frame(width: 96, height: 120)
                 .accessibilityHidden(true)
@@ -585,15 +589,27 @@ struct QuizView: View {
                 speaker.speak(question.phrase.foreign, course: session.course, rate: settings.speechRate)
             } label: {
                 ZStack {
-                    Circle()
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(Color(red: 0.06, green: 0.47, blue: 0.69))
+                        .frame(width: 118, height: 118)
+                        .offset(y: 8)
+
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .fill(Color.lingoBlue)
-                        .frame(width: 104, height: 104)
+                        .frame(width: 118, height: 118)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                .stroke(Color.white.opacity(0.16), lineWidth: 2)
+                        }
+
                     Image(systemName: "speaker.wave.3.fill")
-                        .font(.system(size: 42, weight: .bold))
+                        .font(.system(size: 45, weight: .black))
                         .foregroundStyle(.white)
                 }
+                .padding(.bottom, 8)
             }
             .buttonStyle(TactileCardButtonStyle())
+            .accessibilityLabel("Play phrase")
 
             if question.wordBankTokens.isEmpty {
                 TextField("Type what you hear", text: $viewModel.typedAnswer, axis: .vertical)
@@ -702,9 +718,6 @@ struct QuizView: View {
                 )
             }
 
-
-            // MARK: Listening state
-
             if speechRecognizer.isRecording {
                 Label(
                     "Listening…",
@@ -714,17 +727,11 @@ struct QuizView: View {
                 .foregroundStyle(Color.lingoPurple)
             }
 
-
-            // MARK: Grace period
-
             if speakingGraceDeadline != nil {
                 Text("Keep going…")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.lingoPurple)
             }
-
-
-            // MARK: Recognition error
 
             if viewModel.status == .unanswered,
                let error = speechRecognizer.errorMessage,
@@ -735,9 +742,6 @@ struct QuizView: View {
                     .foregroundStyle(Color.lingoWrong)
                     .multilineTextAlignment(.center)
             }
-
-
-            // MARK: Speak / Stop
 
             Button {
                 if speechRecognizer.isRecording {
@@ -795,9 +799,6 @@ struct QuizView: View {
             .buttonStyle(.plain)
             .disabled(viewModel.status != .unanswered)
 
-
-            // MARK: Hear it / Skip
-
             HStack(spacing: 12) {
 
                 Button {
@@ -840,7 +841,6 @@ struct QuizView: View {
                     }
                 }
                 .buttonStyle(.plain)
-
 
                 Button {
                     skipSpeakingAsCorrect()
@@ -906,7 +906,6 @@ struct QuizView: View {
             }
         }
 
-        // Cumulative — once lit, stays lit.
         speakingRecognisedIndices = newRecognised
 
         let realIndices = canonicalTokens.indices.filter {
@@ -923,14 +922,11 @@ struct QuizView: View {
 
         let remainingWords = totalWords - recognisedWords
 
-        // Every word heard = correct immediately.
         if remainingWords == 0 {
             finishSpeakingRecognition()
             return
         }
 
-        // 10 words or fewer -> allow 1 missing.
-        // More than 10 words -> allow 2 missing.
         let allowedMissing = totalWords > 10 ? 2 : 1
 
         if speakingGraceWorkItem == nil,
@@ -963,12 +959,10 @@ struct QuizView: View {
             settings: settings
         )
     }
-    
+
     private func beginSpeakingGrace() {
         guard speakingGraceWorkItem == nil else { return }
 
-        // This only controls the UI.
-        // Speech recognition KEEPS RUNNING.
         speakingGraceDeadline =
             Date().addingTimeInterval(speakingGraceSeconds)
 
@@ -983,16 +977,11 @@ struct QuizView: View {
                 return
             }
 
-            // Clear the timer FIRST.
             speakingGraceWorkItem = nil
             speakingGraceDeadline = nil
 
-            // The learner got close enough and the
-            // 10-second grace period has expired.
             speechRecognizer.stop()
 
-            // This MUST produce the normal green
-            // "Nicely done!" correct feedback box.
             viewModel.acceptSpeakingRecognition(
                 progressStore: progress,
                 settings: settings
@@ -1007,13 +996,11 @@ struct QuizView: View {
         )
     }
 
-
     private func cancelSpeakingGrace() {
         speakingGraceWorkItem?.cancel()
         speakingGraceWorkItem = nil
         speakingGraceDeadline = nil
     }
-
 
     private func cleanedSpeakingText(_ text: String) -> String {
         var output = SpeechSynthesizer.stripParentheses(text)
@@ -1076,28 +1063,29 @@ struct QuizView: View {
         return Button {
             viewModel.select(option)
         } label: {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .center, spacing: 14) {
                 Text(String(UnicodeScalar(65 + index)!))
                     .font(.caption.weight(.black))
                     .foregroundStyle(selected ? .white : Color.lingoMuted)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 32, height: 32)
                     .background(selected ? Color.lingoBlue : Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
                 Text(option)
-                    .font(.body.weight(.bold))
+                    .font(.body.weight(.black))
                     .foregroundStyle(Color.lingoInk)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Spacer(minLength: 0)
             }
-            .padding(15)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 17)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
             .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
                     .stroke(border, lineWidth: selected || viewModel.status != .unanswered ? 3 : 2)
             }
         }
@@ -1160,11 +1148,7 @@ struct QuizView: View {
             }
 
             if viewModel.status == .unanswered {
-
-                // Main-unit speaking exercises complete automatically,
-                // so they do not need a CHECK button.
                 if !(question.type == .speaking && session.completionNodeID != nil) {
-
                     Button(question.type == .introduction ? "GOT IT" : "CHECK") {
                         speechRecognizer.stop()
                         answerFieldFocused = false
@@ -1192,7 +1176,6 @@ struct QuizView: View {
                 }
 
             } else {
-
                 Button(viewModel.status == .wrong ? "CONTINUE" : "NEXT") {
                     cancelSpeakingGrace()
                     speechRecognizer.stop()
@@ -1374,13 +1357,7 @@ struct QuizView: View {
     }
 }
 
-// MARK: - LanguageTrainer speaking normalizer
-
-/// Kept private to QuizView.swift so the lesson speaking exercise uses the same
-/// recognition rules as LanguageTrainer without requiring another Xcode target file.
 private enum LessonSpeakNormalizer {
-    // These are the same stop words used by LanguageTrainer. They are excluded
-    // from the success-percentage denominator but can still light up when heard.
     static let stopWords: Set<String> = [
         "je", "j", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
         "le", "la", "les", "un", "une", "des", "du", "de", "d",
@@ -1709,9 +1686,6 @@ private final class FeedbackSoundPlayer: ObservableObject {
         }
 
         do {
-            // Speech recognition has just been using the
-            // shared audio session for recording.
-            // Put it back into an output-capable mode.
             let audioSession = AVAudioSession.sharedInstance()
 
             try audioSession.setCategory(
@@ -1721,9 +1695,6 @@ private final class FeedbackSoundPlayer: ObservableObject {
 
             try audioSession.setActive(true)
 
-            // Rebuild the audio engine's output cycle.
-            // engine.isRunning alone is not reliable after
-            // speech recognition has changed the audio session.
             player.stop()
             engine.stop()
             engine.reset()
@@ -1744,8 +1715,6 @@ private final class FeedbackSoundPlayer: ObservableObject {
             player.play()
 
         } catch {
-            // A little feedback beep should NEVER be
-            // capable of killing the lesson.
             print(
                 "Feedback sound error: \(error.localizedDescription)"
             )
@@ -1753,11 +1722,46 @@ private final class FeedbackSoundPlayer: ObservableObject {
     }
 }
 
+private struct LessonProgressBar: View {
+    let progress: Double
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { geometry in
+            let clamped = max(0, min(1, progress))
+            let fillWidth = geometry.size.width * CGFloat(clamped)
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color(.systemGray5))
+
+                Capsule()
+                    .fill(tint)
+                    .frame(width: fillWidth)
+                    .overlay(alignment: .topLeading) {
+                        if fillWidth > 18 {
+                            Capsule()
+                                .fill(Color.white.opacity(0.24))
+                                .frame(width: max(8, fillWidth - 12), height: 3)
+                                .padding(.leading, 6)
+                                .padding(.top, 2)
+                        }
+                    }
+            }
+        }
+    }
+}
+
 private struct TactileCardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .offset(y: configuration.isPressed ? 3 : 0)
-            .shadow(color: .black.opacity(configuration.isPressed ? 0.05 : 0.10), radius: 0, y: configuration.isPressed ? 1 : 4)
+            .offset(y: configuration.isPressed ? 4 : 0)
+            .shadow(
+                color: .black.opacity(configuration.isPressed ? 0.04 : 0.11),
+                radius: 0,
+                y: configuration.isPressed ? 1 : 5
+            )
+            .scaleEffect(configuration.isPressed ? 0.995 : 1)
             .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
     }
 }
