@@ -9,5 +9,6 @@ struct ContentView: View {
             CoursePickerView(progress: progress, settings: settings)
         }
         .tint(Color.lingoGreen)
+        .preferredColorScheme(settings.darkModeEnabled ? .dark : .light)
     }
 }

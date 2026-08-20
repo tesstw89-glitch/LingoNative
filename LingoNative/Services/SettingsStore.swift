@@ -10,6 +10,7 @@ final class SettingsStore: ObservableObject {
     @Published var showLemmaHints: Bool { didSet { save() } }
     @Published var dailyGoalXP: Int { didSet { save() } }
     @Published var speechRate: Double { didSet { save() } }
+    @Published var darkModeEnabled: Bool { didSet { save() } }
     @Published var enabledExerciseTypes: Set<ExerciseType> { didSet { save() } }
 
     private let defaults: UserDefaults
@@ -24,6 +25,7 @@ final class SettingsStore: ObservableObject {
         var showLemmaHints: Bool
         var dailyGoalXP: Int
         var speechRate: Double
+        var darkModeEnabled: Bool?
         var enabledExerciseTypes: Set<ExerciseType>
     }
 
@@ -40,6 +42,7 @@ final class SettingsStore: ObservableObject {
             showLemmaHints = payload.showLemmaHints
             dailyGoalXP = payload.dailyGoalXP
             speechRate = payload.speechRate
+            darkModeEnabled = payload.darkModeEnabled ?? false
             let selectable = payload.enabledExerciseTypes.intersection(Set(ExerciseType.userSelectableCases))
             enabledExerciseTypes = selectable.isEmpty ? Set(ExerciseType.userSelectableCases) : selectable
         } else {
@@ -51,6 +54,7 @@ final class SettingsStore: ObservableObject {
             showLemmaHints = true
             dailyGoalXP = 50
             speechRate = 0.46
+            darkModeEnabled = false
             enabledExerciseTypes = Set(ExerciseType.userSelectableCases)
         }
     }
@@ -64,6 +68,7 @@ final class SettingsStore: ObservableObject {
         showLemmaHints = true
         dailyGoalXP = 50
         speechRate = 0.46
+        darkModeEnabled = false
         enabledExerciseTypes = Set(ExerciseType.userSelectableCases)
         save()
     }
@@ -88,6 +93,7 @@ final class SettingsStore: ObservableObject {
             showLemmaHints: showLemmaHints,
             dailyGoalXP: dailyGoalXP,
             speechRate: speechRate,
+            darkModeEnabled: darkModeEnabled,
             enabledExerciseTypes: enabledExerciseTypes
         )
         if let data = try? JSONEncoder().encode(payload) {
