@@ -15,7 +15,7 @@ final class QuizViewModel: ObservableObject {
     let session: QuizSession
     private let initialQuestionCount: Int
     private var questionStartedAt = Date()
-    private static let lessonFlowVersion = 2
+    private static let lessonFlowVersionBase = 2
 
     private enum LessonScaffoldExercise: CaseIterable {
         case visibleBuild
@@ -35,7 +35,7 @@ final class QuizViewModel: ObservableObject {
            let nodeID = session.completionNodeID,
            savedSession.nodeID == nodeID,
            savedSession.course == session.course,
-           savedSession.flowVersion == Self.lessonFlowVersion,
+           savedSession.flowVersion == Self.lessonFlowVersion(for: session),
            !savedSession.questions.isEmpty,
            !savedSession.questions.contains(where: { $0.type == .introduction }) {
             questions = savedSession.questions
@@ -108,7 +108,7 @@ final class QuizViewModel: ObservableObject {
         return SavedLessonSession(
             nodeID: nodeID,
             course: session.course,
-            flowVersion: Self.lessonFlowVersion,
+            flowVersion: Self.lessonFlowVersion(for: session),
             questions: questions,
             currentIndex: currentIndex,
             selectedAnswer: selectedAnswer,
@@ -181,7 +181,7 @@ final class QuizViewModel: ObservableObject {
         guard status == .unanswered else { return }
         typedAnswer = transcript
     }
-    
+
     func acceptSpeakingRecognition(
         progressStore: ProgressStore,
         settings: SettingsStore
@@ -330,6 +330,18 @@ final class QuizViewModel: ObservableObject {
             && session.exerciseTypes == Set([.listening])
     }
 
+    private static func lessonFlowVersion(for session: QuizSession) -> Int {
+        lessonFlowVersionBase
+            + (criticalExerciseEnabled(.listening, in: session) ? 0 : 100)
+            + (criticalExerciseEnabled(.speaking, in: session) ? 0 : 200)
+    }
+
+    private static func criticalExerciseEnabled(_ type: ExerciseType, in session: QuizSession) -> Bool {
+        guard type == .listening || type == .speaking else { return true }
+        if session.exerciseTypes.isEmpty { return true }
+        return session.exerciseTypes.contains(type)
+    }
+
     private static func makeQuestions(session: QuizSession, progressStore: ProgressStore) -> [QuizQuestion] {
         guard !session.phrasePool.isEmpty else { return [] }
 
@@ -459,53 +471,64 @@ final class QuizViewModel: ObservableObject {
         index: Int,
         session: QuizSession
     ) -> QuizQuestion {
+        let requestedType: ExerciseType
+        let stage: PhraseLearningStage
+
         switch exercise {
         case .visibleBuild:
-            return makeQuestion(
-                phrase: phrase,
-                type: .wordBank,
-                stage: .introduced,
-                index: index,
-                phrasePool: session.phrasePool,
-                allPhrases: session.allPhrases
-            )
+            requestedType = .wordBank
+            stage = .introduced
         case .audioBuild:
-            return makeQuestion(
-                phrase: phrase,
-                type: .listening,
-                stage: .recognition,
-                index: index,
-                phrasePool: session.phrasePool,
-                allPhrases: session.allPhrases
-            )
+            requestedType = .listening
+            stage = .recognition
         case .listenWrite:
-            return makeQuestion(
-                phrase: phrase,
-                type: .listening,
-                stage: .assistedRecall,
-                index: index,
-                phrasePool: session.phrasePool,
-                allPhrases: session.allPhrases
-            )
+            requestedType = .listening
+            stage = .assistedRecall
         case .speaking:
-            return makeQuestion(
-                phrase: phrase,
-                type: .speaking,
-                stage: .assistedRecall,
-                index: index,
-                phrasePool: session.phrasePool,
-                allPhrases: session.allPhrases
-            )
+            requestedType = .speaking
+            stage = .assistedRecall
         }
+
+        let effectiveType = scaffoldExerciseType(
+            requestedType,
+            in: session
+        )
+
+        return makeQuestion(
+            phrase: phrase,
+            type: effectiveType,
+            stage: stage,
+            index: index,
+            phrasePool: session.phrasePool,
+            allPhrases: session.allPhrases
+        )
+    }
+
+    private static func scaffoldExerciseType(
+        _ requestedType: ExerciseType,
+        in session: QuizSession
+    ) -> ExerciseType {
+        guard requestedType == .listening || requestedType == .speaking else {
+            return requestedType
+        }
+        guard !criticalExerciseEnabled(requestedType, in: session) else {
+            return requestedType
+        }
+
+        var replacements: [ExerciseType] = [.wordBank, .typing]
+
+        if criticalExerciseEnabled(.listening, in: session), requestedType != .listening {
+            replacements.append(.listening)
+        }
+        if criticalExerciseEnabled(.speaking, in: session), requestedType != .speaking {
+            replacements.append(.speaking)
+        }
+
+        return replacements.randomElement() ?? .typing
     }
 
     private static func isLessonScaffoldQuestion(_ question: QuizQuestion) -> Bool {
-        switch question.type {
-        case .wordBank, .listening, .speaking:
-            return true
-        default:
-            return false
-        }
+        question.type != .introduction
     }
 
     private static func makeExactScaffoldRetry(
@@ -586,8 +609,14 @@ final class QuizViewModel: ObservableObject {
                 return .typing
             case .established:
                 let core: [ExerciseType] = [.typing, .listening, .wordBank, .speaking]
+                let criticalFiltered = core.filter { type in
+                    if type == .listening || type == .speaking {
+                        return allowed.contains(type)
+                    }
+                    return true
+                }
                 return adaptiveChoice(
-                    core,
+                    criticalFiltered,
                     phrase: phrase,
                     stage: stage,
                     course: course,
