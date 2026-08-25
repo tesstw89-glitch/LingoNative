@@ -13,5 +13,9 @@
 		<string>NotoSansArabic-Regular.ttf</string>
 		<string>NotoSansArabic-Medium.ttf</string>
 	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>

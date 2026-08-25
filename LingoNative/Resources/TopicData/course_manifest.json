@@ -6,9 +6,18 @@
       "title": "Opinions & Reactions",
       "icon": "bubble.left.and.bubble.right.fill",
       "resources": {
-        "french": { "file": "french_opinions.json", "unitStrategy": "context" },
-        "spanish": { "file": "spanish_opinions.json", "unitStrategy": "context" },
-        "arabic": { "file": "arabic_opinions.json", "unitStrategy": "context" }
+        "french": {
+          "file": "french_opinions.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_opinions.json",
+          "unitStrategy": "context"
+        },
+        "arabic": {
+          "file": "arabic_opinions.json",
+          "unitStrategy": "context"
+        }
       }
     },
     {
@@ -16,8 +25,18 @@
       "title": "Clothes & Appearance",
       "icon": "tshirt.fill",
       "resources": {
-        "french": { "file": "french_clothes.json", "unitStrategy": "beforeEmDash" },
-        "spanish": { "file": "spanish_clothes.json", "unitStrategy": "afterEmDash" }
+        "french": {
+          "file": "french_clothes.json",
+          "unitStrategy": "beforeEmDash"
+        },
+        "spanish": {
+          "file": "spanish_clothes.json",
+          "unitStrategy": "afterEmDash"
+        },
+        "arabic": {
+          "file": "arabic_clothes.json",
+          "unitStrategy": "context"
+        }
       }
     },
     {
@@ -25,8 +44,14 @@
       "title": "Places",
       "icon": "mappin.and.ellipse",
       "resources": {
-        "french": { "file": "french_places.json", "unitStrategy": "firstSentence" },
-        "spanish": { "file": "spanish_places.json", "unitStrategy": "afterEmDash" }
+        "french": {
+          "file": "french_places.json",
+          "unitStrategy": "firstSentence"
+        },
+        "spanish": {
+          "file": "spanish_places.json",
+          "unitStrategy": "afterEmDash"
+        }
       }
     },
     {
@@ -34,8 +59,29 @@
       "title": "Getting Around",
       "icon": "tram.fill",
       "resources": {
-        "french": { "file": "french_getting_around.json", "unitStrategy": "beforeColon" },
-        "spanish": { "file": "spanish_getting_around.json", "unitStrategy": "afterEmDash" }
+        "french": {
+          "file": "french_getting_around.json",
+          "unitStrategy": "beforeColon"
+        },
+        "spanish": {
+          "file": "spanish_getting_around.json",
+          "unitStrategy": "afterEmDash"
+        }
+      }
+    },
+    {
+      "id": "food",
+      "title": "Food & Meals",
+      "icon": "fork.knife",
+      "resources": {
+        "french": {
+          "file": "french_food.json",
+          "unitStrategy": "beforeEmDash"
+        },
+        "spanish": {
+          "file": "spanish_food.json",
+          "unitStrategy": "context"
+        }
       }
     }
   ]

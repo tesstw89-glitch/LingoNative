@@ -115,7 +115,24 @@ struct PracticeHubView: View {
     @ViewBuilder
     private func practiceDestination(mode: PracticeMode, pool: [PhraseEntry]) -> some View {
         switch mode {
-        case .listening, .speaking:
+        case .speaking:
+            SpeakingScopeChooserView(
+                course: corpus.course,
+                phrases: pool,
+                progress: progress,
+                sessionLength: settings.sessionLength,
+                speechRate: settings.speechRate,
+                hapticsEnabled: settings.hapticsEnabled,
+                soundEnabled: settings.soundEnabled,
+                onFinished: { completedCount in
+                    progress.recordPracticeSession(
+                        earnedXP: max(10, completedCount * 5),
+                        restoreHeart: settings.heartsEnabled
+                    )
+                }
+            )
+
+        case .listening:
             phraseScopeChooser(mode: mode, allPhrases: pool)
 
         case .matching:
@@ -123,6 +140,7 @@ struct PracticeHubView: View {
                 course: corpus.course,
                 lemmas: lemmaPool,
                 speechRate: settings.speechRate,
+                hapticsEnabled: settings.hapticsEnabled,
                 onFinished: { matchedCount in
                     progress.recordPracticeSession(
                         earnedXP: max(10, matchedCount * 2),
@@ -255,6 +273,7 @@ struct PracticeHubView: View {
                 phrases: pool,
                 sessionLength: settings.sessionLength,
                 speechRate: settings.speechRate,
+                hapticsEnabled: settings.hapticsEnabled,
                 onFinished: { completedCount in
                     progress.recordPracticeSession(
                         earnedXP: max(10, completedCount * 5),
@@ -284,6 +303,7 @@ struct PracticeHubView: View {
                 lemmas: lemmaPool,
                 sessionLength: settings.sessionLength,
                 speechRate: settings.speechRate,
+                hapticsEnabled: settings.hapticsEnabled,
                 onFinished: { completedCount in
                     progress.recordPracticeSession(
                         earnedXP: max(10, completedCount * 5),
@@ -511,6 +531,7 @@ private struct VocabPracticeChooserView: View {
     let lemmas: [Lemma]
     let sessionLength: Int
     let speechRate: Double
+    let hapticsEnabled: Bool
     let onFinished: (Int) -> Void
 
     var body: some View {
@@ -548,6 +569,7 @@ private struct VocabPracticeChooserView: View {
                 lemmas: lemmas,
                 sessionLength: sessionLength,
                 speechRate: speechRate,
+                hapticsEnabled: hapticsEnabled,
                 onFinished: onFinished
             )
         } label: {
@@ -590,6 +612,7 @@ private struct LanguageTrainerVocabPracticeView: View {
     let lemmas: [Lemma]
     let sessionLength: Int
     let speechRate: Double
+    let hapticsEnabled: Bool
     let onFinished: (Int) -> Void
 
     @StateObject private var speaker = SpeechSynthesizer()
@@ -625,6 +648,13 @@ private struct LanguageTrainerVocabPracticeView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle(mode.title)
         .navigationBarTitleDisplayMode(.inline)
+        .sensoryFeedback(trigger: feedback) { _, newValue in
+            guard hapticsEnabled, let newValue else { return nil }
+            switch newValue {
+            case .correct: return .success
+            case .wrong: return .error
+            }
+        }
         .onAppear {
             if queue.isEmpty { startQueue() }
         }
@@ -1094,6 +1124,529 @@ private struct LanguageTrainerVocabPracticeView: View {
     }
 }
 
+// MARK: - Speaking scope / mode selection
+
+private struct SpeakingScopeChooserView: View {
+    let course: LanguageCourse
+    let phrases: [PhraseEntry]
+    @ObservedObject var progress: ProgressStore
+    let sessionLength: Int
+    let speechRate: Double
+    let hapticsEnabled: Bool
+    let soundEnabled: Bool
+    let onFinished: (Int) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var studied: [PhraseEntry] {
+        phrases.filter {
+            progress.learningStage(course: course, phrase: $0) != .unseen
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("SPEAKING")
+                        .font(.custom("Fredoka-SemiBold", size: 13))
+                        .tracking(1.1)
+                        .foregroundStyle(Color.lingoMuted)
+                    Text("Which phrases?")
+                        .font(.custom("Fredoka-Medium", size: 24))
+                        .foregroundStyle(Color.lingoInk)
+                    Text("Choose how much of your corpus to practise.")
+                        .font(.custom("Fredoka-Regular", size: 15))
+                        .foregroundStyle(Color.lingoMuted)
+                }
+
+                scopeLink(
+                    title: "All phrases",
+                    subtitle: "Practice from the whole corpus",
+                    phrases: phrases,
+                    systemImage: "books.vertical.fill"
+                )
+                scopeLink(
+                    title: "Phrases studied so far",
+                    subtitle: "Only phrases you've already encountered",
+                    phrases: studied,
+                    systemImage: "checkmark.circle.fill"
+                )
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Speaking")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func scopeLink(
+        title: String,
+        subtitle: String,
+        phrases: [PhraseEntry],
+        systemImage: String
+    ) -> some View {
+        NavigationLink {
+            SpeakingPracticeModeChooserView(
+                course: course,
+                phrases: phrases,
+                sessionLength: sessionLength,
+                speechRate: speechRate,
+                hapticsEnabled: hapticsEnabled,
+                soundEnabled: soundEnabled,
+                onFinished: onFinished,
+                onHeadphoneFinished: {
+                    dismiss()
+                }
+            )
+        } label: {
+            HStack(spacing: 16) {
+                Image(systemName: systemImage)
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(Color.lingoPurple)
+                    .frame(width: 54, height: 54)
+                    .background(Color.lingoPurple.opacity(0.13))
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.custom("Fredoka-Medium", size: 19))
+                        .foregroundStyle(Color.lingoInk)
+                    Text(subtitle)
+                        .font(.custom("Fredoka-Regular", size: 15))
+                        .foregroundStyle(Color.lingoMuted)
+                    Text("\(phrases.count) phrase\(phrases.count == 1 ? "" : "s") available")
+                        .font(.custom("Fredoka-Medium", size: 13))
+                        .foregroundStyle(Color.lingoPurple)
+                }
+
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(Color.lingoMuted)
+            }
+            .padding(16)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.lingoLine, lineWidth: 2)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(phrases.isEmpty)
+        .opacity(phrases.isEmpty ? 0.5 : 1)
+    }
+}
+
+private struct SpeakingPracticeModeChooserView: View {
+    let course: LanguageCourse
+    let phrases: [PhraseEntry]
+    let sessionLength: Int
+    let speechRate: Double
+    let hapticsEnabled: Bool
+    let soundEnabled: Bool
+    let onFinished: (Int) -> Void
+    let onHeadphoneFinished: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("SPEAKING")
+                        .font(.custom("Fredoka-SemiBold", size: 13))
+                        .tracking(1.1)
+                        .foregroundStyle(Color.lingoMuted)
+                    Text("Choose a mode")
+                        .font(.custom("Fredoka-Medium", size: 24))
+                        .foregroundStyle(Color.lingoInk)
+                }
+
+                NavigationLink {
+                    LanguageTrainerSpeakingPracticeView(
+                        course: course,
+                        phrases: phrases,
+                        sessionLength: sessionLength,
+                        speechRate: speechRate,
+                        hapticsEnabled: hapticsEnabled,
+                        onFinished: onFinished
+                    )
+                } label: {
+                    modeCard(
+                        title: "Standard",
+                        subtitle: "Use the screen and controls as normal",
+                        systemImage: "mic.fill",
+                        tint: .lingoPurple
+                    )
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink {
+                    HeadphoneSpeakingPracticeView(
+                        course: course,
+                        phrases: phrases,
+                        speechRate: speechRate,
+                        hapticsEnabled: hapticsEnabled,
+                        onFinished: onFinished,
+                        onReturnToPractice: onHeadphoneFinished
+                    )
+                } label: {
+                    modeCard(
+                        title: "Headphone mode",
+                        subtitle: soundEnabled
+                            ? "20 questions · works with the screen locked"
+                            : "Turn sound on in Settings first",
+                        systemImage: "headphones",
+                        tint: .lingoBlue
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(!soundEnabled || phrases.isEmpty)
+                .opacity((!soundEnabled || phrases.isEmpty) ? 0.5 : 1)
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Speaking")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func modeCard(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        tint: Color
+    ) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: systemImage)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(tint)
+                .frame(width: 54, height: 54)
+                .background(tint.opacity(0.13))
+                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.custom("Fredoka-Medium", size: 19))
+                    .foregroundStyle(Color.lingoInk)
+                Text(subtitle)
+                    .font(.custom("Fredoka-Regular", size: 15))
+                    .foregroundStyle(Color.lingoMuted)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .foregroundStyle(Color.lingoMuted)
+        }
+        .padding(16)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.lingoLine, lineWidth: 2)
+        }
+    }
+}
+
+// MARK: - Lock-screen hands-free speaking
+
+private struct HeadphoneSpeakingPracticeView: View {
+    let course: LanguageCourse
+    let phrases: [PhraseEntry]
+    let speechRate: Double
+    let hapticsEnabled: Bool
+    let onFinished: (Int) -> Void
+    let onReturnToPractice: () -> Void
+
+    @StateObject private var speaker = SpeechSynthesizer()
+    @StateObject private var recognizer = ContinuousSpeechRecognizerService()
+
+    @State private var queue: [PhraseEntry] = []
+    @State private var index = 0
+    @State private var recognisedIndices: Set<Int> = []
+    @State private var hasStarted = false
+    @State private var isTransitioning = false
+    @State private var correctCount = 0
+    @State private var didReportRun = false
+    @State private var runTask: Task<Void, Never>?
+
+    private var eligible: [PhraseEntry] {
+        phrases.filter {
+            !$0.foreign.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !$0.english.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    private var current: PhraseEntry? {
+        queue.indices.contains(index) ? queue[index] : nil
+    }
+
+    var body: some View {
+        Group {
+            if !hasStarted {
+                startView
+            } else if let current {
+                activeView(current)
+            } else {
+                ContentUnavailableView("No speaking phrases", systemImage: "headphones.circle")
+            }
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Headphone Mode")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: recognizer.transcript) { _, transcript in
+            handleTranscript(transcript)
+        }
+        .sensoryFeedback(trigger: correctCount) { oldValue, newValue in
+            guard hapticsEnabled, newValue > oldValue else { return nil }
+            return .success
+        }
+        .onDisappear {
+            runTask?.cancel()
+            runTask = nil
+            speaker.stop()
+            speaker.preservesActiveAudioSession = false
+            recognizer.endSession()
+        }
+    }
+
+    private var startView: some View {
+        VStack(spacing: 22) {
+            Spacer()
+            Image(systemName: "headphones.circle.fill")
+                .font(.system(size: 88))
+                .foregroundStyle(Color.lingoBlue)
+            VStack(spacing: 8) {
+                Text("Headphone Mode")
+                    .font(.custom("Fredoka-Medium", size: 30))
+                    .foregroundStyle(Color.lingoInk)
+                Text("Press Start while the phone is unlocked. After that you can lock the screen and put the phone away.")
+                    .font(.custom("Fredoka-Regular", size: 16))
+                    .foregroundStyle(Color.lingoMuted)
+                    .multilineTextAlignment(.center)
+                Text("You'll hear the phrase, speak it, hear “Correct!”, and move automatically through up to 20 questions.")
+                    .font(.custom("Fredoka-Regular", size: 15))
+                    .foregroundStyle(Color.lingoMuted)
+                    .multilineTextAlignment(.center)
+            }
+            Button("START") { startRun() }
+                .font(.custom("Fredoka-Medium", size: 18))
+                .buttonStyle(DuoButtonStyle(
+                    fill: .lingoBlue,
+                    shadow: Color.lingoBlue.opacity(0.65)
+                ))
+                .disabled(eligible.isEmpty)
+                .opacity(eligible.isEmpty ? 0.5 : 1)
+            Text("The microphone stays active for this exercise so iOS can keep it running while locked.")
+                .font(.custom("Fredoka-Regular", size: 13))
+                .foregroundStyle(Color.lingoMuted)
+                .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .padding(28)
+    }
+
+    private func activeView(_ current: PhraseEntry) -> some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                HStack {
+                    Text("Question \(index + 1) / \(queue.count)")
+                        .font(.custom("Fredoka-Regular", size: 15))
+                        .foregroundStyle(Color.lingoMuted)
+                    Spacer()
+                    if speaker.isSpeaking {
+                        Label("Listen…", systemImage: "headphones")
+                            .font(.custom("Fredoka-Medium", size: 14))
+                            .foregroundStyle(Color.lingoBlue)
+                    } else if recognizer.isRecording {
+                        Label("Speak…", systemImage: "waveform")
+                            .font(.custom("Fredoka-Medium", size: 14))
+                            .foregroundStyle(Color.lingoPurple)
+                    } else if isTransitioning {
+                        Label("Correct", systemImage: "checkmark.circle.fill")
+                            .font(.custom("Fredoka-Medium", size: 14))
+                            .foregroundStyle(Color.lingoGreen)
+                    }
+                }
+
+                VStack(spacing: 8) {
+                    Text(current.english)
+                        .font(.custom("Fredoka-Medium", size: 21))
+                        .foregroundStyle(Color.lingoInk)
+                        .multilineTextAlignment(.center)
+                    Text(current.foreign)
+                        .font(.custom(
+                            course == .arabic ? "NotoSansArabic-Regular" : "Fredoka-Medium",
+                            size: course == .arabic ? 25 : 21
+                        ))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(22)
+                .frame(maxWidth: .infinity)
+                .background(Color.lingoPurple)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                if recognizer.isRecording {
+                    Text(recognizer.transcript.isEmpty
+                         ? "Listening for your answer…"
+                         : recognizer.transcript)
+                        .font(.custom("Fredoka-Regular", size: 16))
+                        .foregroundStyle(Color.lingoMuted)
+                        .multilineTextAlignment(.center)
+                }
+                if let error = recognizer.errorMessage {
+                    Text(error)
+                        .font(.custom("Fredoka-Regular", size: 14))
+                        .foregroundStyle(Color.lingoWrong)
+                        .multilineTextAlignment(.center)
+                }
+                Text("You can lock the screen now — no taps needed.")
+                    .font(.custom("Fredoka-Regular", size: 13))
+                    .foregroundStyle(Color.lingoMuted)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(20)
+            .padding(.bottom, 40)
+        }
+    }
+
+    private func startRun() {
+        runTask?.cancel()
+        speaker.stop()
+        recognizer.endSession()
+
+        queue = Array(eligible.shuffled().prefix(min(20, eligible.count)))
+        index = 0
+        recognisedIndices = []
+        correctCount = 0
+        didReportRun = false
+        isTransitioning = false
+
+        guard !queue.isEmpty else { return }
+
+        runTask = Task { @MainActor in
+            let ready = await recognizer.startSession(
+                localeIdentifier: course.speechLocaleIdentifier
+            )
+            guard ready, !Task.isCancelled else { return }
+
+            speaker.preservesActiveAudioSession = true
+            hasStarted = true
+            await playCurrentAndListen()
+        }
+    }
+
+    private func playCurrentAndListen() async {
+        guard !Task.isCancelled, hasStarted, let current else { return }
+
+        recognizer.pauseRecognition()
+        recognisedIndices = []
+        isTransitioning = false
+
+        speaker.speak(current.foreign, course: course, rate: speechRate)
+        await waitForSpeechToFinish()
+
+        guard !Task.isCancelled,
+              hasStarted,
+              self.current?.id == current.id else { return }
+
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard !Task.isCancelled else { return }
+
+        recognizer.beginRecognition()
+    }
+
+    private func handleTranscript(_ raw: String) {
+        guard hasStarted,
+              !isTransitioning,
+              let current,
+              recognizer.isRecording else { return }
+
+        if course == .arabic,
+           QuizViewModel.answersMatch(raw, current.foreign) {
+            finishCurrentCorrectly()
+            return
+        }
+
+        let canonical = PracticeTextNormalizer.alignedTokens(
+            current.foreign,
+            course: course
+        )
+        let heard = PracticeTextNormalizer.transcriptTokenSet(
+            raw,
+            course: course
+        )
+
+        var updated = recognisedIndices
+        for (tokenIndex, token) in canonical.enumerated() where !token.isEmpty {
+            if heard.contains(token) { updated.insert(tokenIndex) }
+        }
+        recognisedIndices = updated
+
+        let important = PracticeTextNormalizer.importantIndices(canonical, course: course)
+        let denominator = important.isEmpty
+            ? canonical.indices.filter { !canonical[$0].isEmpty }
+            : important
+        guard !denominator.isEmpty else { return }
+
+        let heardImportant = denominator.filter {
+            recognisedIndices.contains($0)
+        }.count
+
+        guard heardImportant == denominator.count else { return }
+        finishCurrentCorrectly()
+    }
+
+    private func finishCurrentCorrectly() {
+        guard !isTransitioning else { return }
+
+        isTransitioning = true
+        recognizer.pauseRecognition()
+        correctCount += 1
+
+        runTask?.cancel()
+        runTask = Task { @MainActor in
+            speaker.speakEnglish("Correct!", rate: 0.50)
+            await waitForSpeechToFinish()
+
+            guard !Task.isCancelled else { return }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+
+            if index + 1 >= queue.count {
+                reportRunIfNeeded()
+                speaker.speakEnglish("Exercise done!", rate: 0.48)
+                await waitForSpeechToFinish()
+
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+
+                speaker.preservesActiveAudioSession = false
+                recognizer.endSession()
+                hasStarted = false
+                onReturnToPractice()
+                return
+            }
+
+            index += 1
+            await playCurrentAndListen()
+        }
+    }
+
+    private func waitForSpeechToFinish() async {
+        for _ in 0..<900 {
+            guard !Task.isCancelled else { return }
+            if !speaker.isSpeaking { return }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        speaker.stop()
+    }
+
+    private func reportRunIfNeeded() {
+        guard !didReportRun else { return }
+        didReportRun = true
+        onFinished(queue.count)
+    }
+}
+
 // MARK: - LanguageTrainer-style speaking drill
 
 private struct LanguageTrainerSpeakingPracticeView: View {
@@ -1101,6 +1654,7 @@ private struct LanguageTrainerSpeakingPracticeView: View {
     let phrases: [PhraseEntry]
     let sessionLength: Int
     let speechRate: Double
+    let hapticsEnabled: Bool
     let onFinished: (Int) -> Void
 
     @StateObject private var speaker = SpeechSynthesizer()
@@ -1114,7 +1668,7 @@ private struct LanguageTrainerSpeakingPracticeView: View {
     @State private var isDone = false
     @State private var didReportRun = false
 
-    private enum SpeakButtonMode { case speak, keepGoing, next }
+    private enum SpeakButtonMode: Equatable { case speak, keepGoing, next }
 
     private var current: PhraseEntry? {
         queue.indices.contains(index) ? queue[index] : nil
@@ -1140,6 +1694,10 @@ private struct LanguageTrainerSpeakingPracticeView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Speaking")
         .navigationBarTitleDisplayMode(.inline)
+        .sensoryFeedback(trigger: mode) { _, newValue in
+            guard hapticsEnabled else { return nil }
+            return newValue == .next ? .success : nil
+        }
         .onAppear {
             if queue.isEmpty { startQueue() }
         }
@@ -1461,6 +2019,7 @@ private struct LanguageTrainerLemmaMatchView: View {
     let course: LanguageCourse
     let lemmas: [Lemma]
     let speechRate: Double
+    let hapticsEnabled: Bool
     let onFinished: (Int) -> Void
 
     @StateObject private var speaker = SpeechSynthesizer()
@@ -1477,6 +2036,8 @@ private struct LanguageTrainerLemmaMatchView: View {
     @State private var soundEnabled = true
     @State private var runID = UUID()
     @State private var didReportRun = false
+    @State private var hapticTrigger = 0
+    @State private var lastMatchWasCorrect = true
 
     private let visibleCount = 6
 
@@ -1589,6 +2150,10 @@ private struct LanguageTrainerLemmaMatchView: View {
         .onDisappear {
             speaker.stop()
         }
+        .sensoryFeedback(trigger: hapticTrigger) { _, _ in
+            guard hapticsEnabled else { return nil }
+            return lastMatchWasCorrect ? .success : .error
+        }
     }
 
     private func matchColumn(ids: [String], isLeft: Bool) -> some View {
@@ -1655,6 +2220,8 @@ private struct LanguageTrainerLemmaMatchView: View {
             selectedLeft = nil
             selectedRight = nil
             matches += 1
+            lastMatchWasCorrect = true
+            hapticTrigger += 1
 
             withAnimation(.easeInOut(duration: 0.22)) {
                 dissolvingIDs.insert(left)
@@ -1666,6 +2233,9 @@ private struct LanguageTrainerLemmaMatchView: View {
                 dissolvingIDs.remove(left)
             }
         } else {
+            lastMatchWasCorrect = false
+            hapticTrigger += 1
+
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 selectedLeft = nil

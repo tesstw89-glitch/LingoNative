@@ -5,10 +5,21 @@ import Speech
 import SwiftUI
 
 @MainActor
-final class SpeechSynthesizer: ObservableObject {
+final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     private let synthesizer = AVSpeechSynthesizer()
     private var elevenLabsPlayer: AVAudioPlayer?
     private var elevenLabsTask: Task<Void, Never>?
+
+    @Published private(set) var isSpeaking = false
+
+    /// Headphone Mode owns one playAndRecord session for the whole run.
+    /// When true, TTS must not replace that session with playback-only audio.
+    var preservesActiveAudioSession = false
+
+    override init() {
+        super.init()
+        synthesizer.delegate = self
+    }
 
     func speak(_ text: String, course: LanguageCourse, rate: Double = 0.48, volume: Float = 1.0) {
         let cleaned = Self.stripParentheses(text)
@@ -33,6 +44,25 @@ final class SpeechSynthesizer: ObservableObject {
         speakWithSystemVoice(cleaned, course: course, rate: rate, volume: volume)
     }
 
+    func speakEnglish(_ text: String, rate: Double = 0.48, volume: Float = 1.0) {
+        let cleaned = Self.stripParentheses(text)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleaned.isEmpty else { return }
+
+        guard SettingsStore.runtimeSoundEnabled else {
+            stop()
+            return
+        }
+
+        speakWithSystemVoice(
+            cleaned,
+            localeIdentifier: "en-GB",
+            rate: rate,
+            volume: volume
+        )
+    }
+
     func stop() {
         elevenLabsTask?.cancel()
         elevenLabsTask = nil
@@ -45,6 +75,8 @@ final class SpeechSynthesizer: ObservableObject {
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
+
+        isSpeaking = false
     }
 
     private func speakArabicWithElevenLabs(_ text: String, rate: Double, volume: Float) {
@@ -69,6 +101,7 @@ final class SpeechSynthesizer: ObservableObject {
         elevenLabsTask?.cancel()
         elevenLabsPlayer?.stop()
         elevenLabsPlayer = nil
+        isSpeaking = true
 
         let cacheURL = elevenLabsCacheURL(
             text: text,
@@ -103,6 +136,7 @@ final class SpeechSynthesizer: ObservableObject {
             } catch is CancellationError {
                 return
             } catch {
+                self.isSpeaking = false
                 print("⚠️ ElevenLabs TTS error:", error.localizedDescription)
             }
         }
@@ -154,13 +188,16 @@ final class SpeechSynthesizer: ObservableObject {
             configureAudioSessionForTTS()
 
             let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = self
             player.enableRate = true
             player.rate = Self.elevenLabsPlaybackRate(from: rate)
             player.volume = max(0, min(volume, 1))
             player.prepareToPlay()
+            isSpeaking = true
             player.play()
             elevenLabsPlayer = player
         } catch {
+            isSpeaking = false
             print("⚠️ ElevenLabs playback error:", error.localizedDescription)
         }
     }
@@ -183,6 +220,20 @@ final class SpeechSynthesizer: ObservableObject {
     }
 
     private func speakWithSystemVoice(_ text: String, course: LanguageCourse, rate: Double, volume: Float) {
+        speakWithSystemVoice(
+            text,
+            localeIdentifier: course.speechLocaleIdentifier,
+            rate: rate,
+            volume: volume
+        )
+    }
+
+    private func speakWithSystemVoice(
+        _ text: String,
+        localeIdentifier: String,
+        rate: Double,
+        volume: Float
+    ) {
         configureAudioSessionForTTS()
 
         elevenLabsTask?.cancel()
@@ -194,11 +245,12 @@ final class SpeechSynthesizer: ObservableObject {
         }
 
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = bestVoice(for: course.speechLocaleIdentifier)
+        utterance.voice = bestVoice(for: localeIdentifier)
         utterance.rate = Float(min(max(rate, 0.30), 0.60))
         utterance.volume = max(0, min(volume, 1))
         utterance.pitchMultiplier = 1.0
 
+        isSpeaking = true
         synthesizer.speak(utterance)
     }
 
@@ -239,7 +291,44 @@ final class SpeechSynthesizer: ObservableObject {
         return languageCode
     }
 
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        didFinish utterance: AVSpeechUtterance
+    ) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if !self.synthesizer.isSpeaking {
+                self.isSpeaking = false
+            }
+        }
+    }
+
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        didCancel utterance: AVSpeechUtterance
+    ) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if !self.synthesizer.isSpeaking {
+                self.isSpeaking = false
+            }
+        }
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(
+        _ player: AVAudioPlayer,
+        successfully flag: Bool
+    ) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if self.elevenLabsPlayer === player {
+                self.isSpeaking = false
+            }
+        }
+    }
+
     private func configureAudioSessionForTTS() {
+        if preservesActiveAudioSession { return }
         let session = AVAudioSession.sharedInstance()
 
         do {
@@ -367,7 +456,11 @@ final class SpeechRecognizerService: ObservableObject {
 
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audioSession.setCategory(
+                .record,
+                mode: .measurement,
+                options: [.duckOthers, .allowBluetooth]
+            )
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
             let request = SFSpeechAudioBufferRecognitionRequest()
@@ -437,3 +530,206 @@ final class SpeechRecognizerService: ObservableObject {
         }
     }
 }
+
+private final class ContinuousSpeechBufferRouter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var enabled = false
+
+    func route(
+        to request: SFSpeechAudioBufferRecognitionRequest?,
+        enabled: Bool
+    ) {
+        lock.lock()
+        self.request = request
+        self.enabled = enabled
+        lock.unlock()
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        lock.lock()
+        let request = enabled ? request : nil
+        lock.unlock()
+        request?.append(buffer)
+    }
+}
+
+@MainActor
+final class ContinuousSpeechRecognizerService: ObservableObject {
+    @Published var transcript = ""
+    @Published var isRecording = false
+    @Published var errorMessage: String?
+    @Published private(set) var isSessionActive = false
+
+    private let audioEngine = AVAudioEngine()
+    private let router = ContinuousSpeechBufferRouter()
+
+    private var recognizer: SFSpeechRecognizer?
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var hasInputTap = false
+
+    func startSession(localeIdentifier: String) async -> Bool {
+        if isSessionActive { return true }
+
+        transcript = ""
+        errorMessage = nil
+
+        let speechStatus = await requestSpeechAuthorization()
+        guard speechStatus == .authorized else {
+            errorMessage = "Speech recognition permission is needed for headphone mode."
+            return false
+        }
+
+        let microphoneAllowed = await requestMicrophonePermission()
+        guard microphoneAllowed else {
+            errorMessage = "Microphone permission is needed for headphone mode."
+            return false
+        }
+
+        guard let recognizer = SFSpeechRecognizer(
+            locale: Locale(identifier: localeIdentifier)
+        ) else {
+            errorMessage = "Speech recognition is not available for this language."
+            return false
+        }
+
+        guard recognizer.isAvailable else {
+            errorMessage = "Speech recognition is temporarily unavailable."
+            return false
+        }
+
+        self.recognizer = recognizer
+
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(
+                .playAndRecord,
+                mode: .voiceChat,
+                options: [.duckOthers, .allowBluetooth, .defaultToSpeaker]
+            )
+            try audioSession.setActive(true)
+
+            let inputNode = audioEngine.inputNode
+            let format = inputNode.outputFormat(forBus: 0)
+
+            inputNode.installTap(
+                onBus: 0,
+                bufferSize: 1024,
+                format: format
+            ) { [router] buffer, _ in
+                router.append(buffer)
+            }
+            hasInputTap = true
+
+            audioEngine.prepare()
+            try audioEngine.start()
+
+            isSessionActive = true
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            endSession()
+            return false
+        }
+    }
+
+    func beginRecognition() {
+        guard isSessionActive,
+              let recognizer,
+              recognizer.isAvailable else {
+            errorMessage = "Speech recognition is temporarily unavailable."
+            return
+        }
+
+        stopRecognitionTask()
+        transcript = ""
+        errorMessage = nil
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+
+        if recognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        }
+
+        recognitionRequest = request
+        router.route(to: request, enabled: true)
+
+        recognitionTask = recognizer.recognitionTask(with: request) {
+            [weak self] result, error in
+            Task { @MainActor in
+                guard let self else { return }
+
+                if let result {
+                    self.transcript = result.bestTranscription.formattedString
+                }
+
+                if let error {
+                    if self.transcript.isEmpty {
+                        self.errorMessage = error.localizedDescription
+                    }
+                    self.router.route(to: nil, enabled: false)
+                    self.isRecording = false
+                }
+            }
+        }
+
+        isRecording = true
+    }
+
+    /// Recognition pauses between prompts, but the microphone engine and
+    /// playAndRecord session stay active so lock-screen execution continues.
+    func pauseRecognition() {
+        stopRecognitionTask()
+        transcript = ""
+        errorMessage = nil
+    }
+
+    func endSession() {
+        stopRecognitionTask()
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+
+        if hasInputTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInputTap = false
+        }
+
+        isSessionActive = false
+        recognizer = nil
+        try? AVAudioSession.sharedInstance().setActive(
+            false,
+            options: .notifyOthersOnDeactivation
+        )
+    }
+
+    private func stopRecognitionTask() {
+        router.route(to: nil, enabled: false)
+        recognitionRequest?.endAudio()
+        recognitionTask?.cancel()
+        recognitionRequest = nil
+        recognitionTask = nil
+        isRecording = false
+    }
+
+    private func requestSpeechAuthorization() async
+        -> SFSpeechRecognizerAuthorizationStatus {
+        await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status)
+            }
+        }
+    }
+
+    private func requestMicrophonePermission() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+    }
+}
+
