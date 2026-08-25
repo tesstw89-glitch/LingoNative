@@ -521,7 +521,7 @@ final class SpeechRecognizerService: ObservableObject {
             return
         }
         guard recognizer.isAvailable else {
-            errorMessage = "Speech recognition is temporarily unavailable for this language."
+            errorMessage = "Speech recognition is temporarily unavailable."
             return
         }
 
