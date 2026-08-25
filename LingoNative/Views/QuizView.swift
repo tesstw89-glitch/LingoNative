@@ -1859,11 +1859,15 @@ struct QuizView: View {
 
         let canonicalTokens =
             LessonSpeakNormalizer.sentenceCanonicalTokensAlignedToWords(
-                cleanedSpeakingText(question.phrase.foreign)
+                cleanedSpeakingText(question.phrase.foreign),
+                course: session.course
             )
 
         let heardSet =
-            LessonSpeakNormalizer.transcriptTokenSet(raw)
+            LessonSpeakNormalizer.transcriptTokenSet(
+                raw,
+                course: session.course
+            )
 
         var newRecognised = speakingRecognisedIndices
 
@@ -2693,6 +2697,7 @@ private enum LessonSpeakNormalizer {
 
     static let numberMap: [String: String] = [
         "zero": "0",
+        "zéro": "0",
         "un": "1", "une": "1",
         "deux": "2",
         "trois": "3",
@@ -2717,39 +2722,272 @@ private enum LessonSpeakNormalizer {
         "cent": "100"
     ]
 
-    static let homophones: [String: [String]] = [
-        "a": ["a", "à"],
-        "un": ["un", "en", "an"],
-        "au": ["au", "aux"],
-        "ces": ["ces", "c est", "c'est", "sais", "sait", "ses"],
-        "ca": ["ça", "sa"],
-        "cent": ["cent", "sens", "sent"],
-        "sang": ["sang", "sans"],
-        "on": ["on", "ont"],
-        "ou": ["ou", "où"],
-        "peu": ["peu", "peux", "peut"],
-        "quand": ["quand", "quant", "qu en", "qu'en"],
-        "si": ["si", "six"],
-        "son": ["son", "sont"],
-        "sou": ["sou", "sous"],
-        "ta": ["ta", "t a", "t'a", "tas", "t as", "t'as"],
-        "tes": ["tes", "t es", "t'es"],
-        "tu": ["tu", "tue"],
-        "vin": ["vin", "vain", "vingt"],
-        "vers": ["vers", "vert"]
+    // MARK: French speech-to-text tolerance
+    //
+    // This is deliberately more permissive than written-answer checking.
+    // The aim is to judge what the learner SAID, not which spelling Apple
+    // Speech chose for an identical (or intentionally tolerated) sound.
+    //
+    // Accented e is intentionally preserved by frenchLookupKey so forms such
+    // as "parle" and "parlé" are NOT accidentally treated as the same sound.
+
+    private static let frenchHomophoneGroups: [[String]] = [
+        // Function words, contractions and grammatical forms
+        ["a", "à", "as"],
+        ["au", "eau", "haut"],
+        ["aux", "eaux", "hauts"],
+        ["ou", "où"],
+        ["du", "dû"],
+        ["la", "là", "l'a"],
+        ["ma", "m'a"],
+        ["ta", "t'a", "tas", "t'as"],
+        ["ça", "sa", "s'a"],
+        ["ce", "se"],
+        ["on", "ont"],
+        ["son", "sont"],
+        ["mon", "m'ont", "mont"],
+        ["ton", "t'ont", "thon"],
+        ["leur", "leurs"],
+        ["ni", "n'y"],
+        ["si", "s'y"],
+        ["quel", "quelle", "qu'elle"],
+        ["quels", "quelles", "qu'elles"],
+        ["quand", "quant", "qu'en"],
+        ["sans", "sang", "cent", "sens", "sent", "s'en", "100"],
+        ["dans", "d'en"],
+        ["tant", "temps", "t'en"],
+        ["ment", "m'en"],
+        ["en", "an"],
+        ["les", "l'ai"],
+        ["l'est", "lait", "laid", "laie"],
+        ["c'est", "sais", "sait"],
+        ["mais", "mes", "met", "mets"],
+        ["peu", "peux", "peut"],
+        ["faux", "faut"],
+        ["vaux", "vaut"],
+        ["veux", "veut"],
+        ["sur", "sûr"],
+
+        // High-frequency verb forms
+        ["fais", "fait"],
+        ["dis", "dit"],
+        ["lis", "lit"],
+        ["ris", "rit"],
+        ["vis", "vit"],
+        ["suis", "suit"],
+        ["écris", "écrit"],
+        ["conduis", "conduit"],
+        ["construis", "construit"],
+        ["produis", "produit"],
+        ["traduis", "traduit"],
+        ["fuis", "fuit"],
+        ["cuis", "cuit"],
+        ["nuis", "nuit"],
+        ["prends", "prend"],
+        ["comprends", "comprend"],
+        ["apprends", "apprend"],
+        ["attends", "attend"],
+        ["entends", "entend"],
+        ["descends", "descend"],
+        ["rends", "rend"],
+        ["réponds", "répond"],
+        ["perds", "perd"],
+        ["vends", "vend"],
+        ["tends", "tend"],
+        ["défends", "défend"],
+        ["pars", "part"],
+        ["sors", "sort"],
+        ["dors", "dort"],
+        ["cours", "court"],
+        ["meurs", "meurt"],
+        ["sers", "sert"],
+        ["mens", "ment"],
+        ["bats", "bat"],
+        ["bois", "boit"],
+        ["crois", "croit", "croix"],
+        ["vois", "voit", "voie", "voix"],
+        ["dois", "doit", "doigt", "doigts"],
+        ["reçois", "reçoit"],
+        ["aperçois", "aperçoit"],
+        ["connais", "connaît"],
+        ["reconnais", "reconnaît"],
+        ["parais", "paraît"],
+        ["plais", "plaît"],
+        ["nais", "naît"],
+        ["viens", "vient"],
+        ["tiens", "tient"],
+        ["deviens", "devient"],
+        ["reviens", "revient"],
+        ["retiens", "retient"],
+        ["conviens", "convient"],
+
+        // Everyday lexical homophones
+        ["air", "aire", "ère"],
+        ["amande", "amende"],
+        ["ancre", "encre"],
+        ["auteur", "hauteur"],
+        ["bal", "balle"],
+        ["bon", "bond"],
+        ["boue", "bout"],
+        ["cane", "canne"],
+        ["chaîne", "chêne"],
+        ["chair", "cher", "chère", "chaire"],
+        ["champ", "chant"],
+        ["chœur", "cœur", "coeur"],
+        ["compte", "conte", "comte"],
+        ["cou", "coup", "coût", "cout"],
+        ["cour", "cours", "court"],
+        ["date", "datte"],
+        ["dessin", "dessein"],
+        ["différend", "différent"],
+        ["fer", "faire"],
+        ["foi", "foie", "fois"],
+        ["fond", "fonds", "font"],
+        ["guerre", "guère"],
+        ["hôtel", "autel"],
+        ["mal", "malle"],
+        ["mer", "mère", "maire"],
+        ["mur", "mûr"],
+        ["nom", "non"],
+        ["paire", "pair", "père"],
+        ["pause", "pose"],
+        ["peau", "pot", "pots"],
+        ["poids", "pois"],
+        ["point", "poing"],
+        ["porc", "port"],
+        ["reine", "renne", "rêne"],
+        ["repaire", "repère"],
+        ["sain", "sein", "saint", "seing", "ceint"],
+        ["saut", "seau", "sot", "sceau"],
+        ["scène", "Seine", "saine"],
+        ["signe", "cygne"],
+        ["tante", "tente"],
+        ["tôt", "taux"],
+        ["toi", "toit", "toits"],
+        ["moi", "mois"],
+        ["ver", "verre", "vert", "vers"],
+        ["vin", "vain", "vingt", "20"],
+        ["pain", "pin", "peint", "peins"],
+        ["faim", "fin", "feint", "feins"],
+        ["plein", "plaint"],
+        ["plan", "plant"],
+        ["prix", "pris"],
+        ["près", "prêt", "prêts"],
+        ["roux", "roue"],
+        ["salle", "sale"]
     ]
 
-    private static let variantToCanonical: [String: String] = {
+    // Near-homophones / recurring STT confusions that we intentionally accept.
+    // These are NOT claims that the words are linguistically identical.
+    private static let frenchNearSpeechGroups: [[String]] = [
+        ["dessus", "dessous"],
+        ["des", "dès"],
+        ["et", "est", "es", "ai"],
+        ["ces", "ses", "sais", "sait", "c'est"],
+        ["tes", "t'es"],
+        ["un", "hein", "en", "an", "1"],
+        ["si", "six", "6"],
+        ["tout", "tous"],
+        ["plus", "plu"]
+    ]
+
+    // Common regular -er verbs. For these stems:
+    //   parle / parles / parlent are equivalent in speech;
+    //   parler / parlé / parlée / parlés / parlées / parlez are equivalent.
+    // The two families remain separate, so "parle" != "parlé".
+    private static let frenchRegularERStems: [String] = [
+        "accept", "accompagn", "ajout", "aid", "aim", "annonc", "apport",
+        "arrêt", "assur", "bavard", "boug", "cach", "chang", "cherch",
+        "command", "commenc", "compar", "compt", "continu", "coup",
+        "cuisin", "dans", "demand", "donn", "écout", "embrass", "emport",
+        "entr", "expliqu", "ferm", "gard", "goût", "habit", "imagin",
+        "invit", "jou", "laiss", "lav", "mang", "march", "montr",
+        "occup", "oubli", "parl", "partag", "pass", "pens", "plac",
+        "port", "prépar", "quitt", "racont", "regard", "remplac", "rentr",
+        "réserv", "rest", "retourn", "sign", "sembl", "termin", "tomb",
+        "touch", "travaill", "trouv", "utilis", "visit", "voyag"
+    ]
+
+    // Common stem-changing -er presents whose audible e/es/ent forms are
+    // still identical to one another.
+    private static let frenchStemChangingPresentGroups: [[String]] = [
+        ["achète", "achètes", "achètent"],
+        ["appelle", "appelles", "appellent"],
+        ["amène", "amènes", "amènent"],
+        ["emmène", "emmènes", "emmènent"],
+        ["espère", "espères", "espèrent"],
+        ["préfère", "préfères", "préfèrent"],
+        ["répète", "répètes", "répètent"],
+        ["lève", "lèves", "lèvent"],
+        ["jette", "jettes", "jettent"],
+        ["essaie", "essaies", "essaient"],
+        ["paye", "payes", "payent"],
+        ["paie", "paies", "paient"],
+        ["envoie", "envoies", "envoient"],
+        ["nettoie", "nettoies", "nettoient"]
+    ]
+
+    // Generic silent-plural tolerance is useful in spoken French, but these
+    // frequent words must keep their final s/x because dropping it would
+    // collapse genuinely different pronunciations such as ce/ces or le/les.
+    private static let frenchKeepFinalSOrX: Set<String> = [
+        "ces", "des", "les", "mes", "ses", "tes",
+        "plus", "tous", "six", "dix", "fils", "ours", "os", "bus", "virus"
+    ]
+
+    private static let frenchVariantToCanonical: [String: String] = {
         var map: [String: String] = [:]
-        for (canonical, variants) in homophones {
-            for variant in variants {
-                map[variant] = canonical
+
+        func register(_ forms: [String], canonical: String? = nil) {
+            guard let first = forms.first else { return }
+            let canonicalKey = frenchLookupKey(canonical ?? first)
+            guard !canonicalKey.isEmpty else { return }
+
+            for form in forms {
+                let key = frenchLookupKey(form)
+                if !key.isEmpty {
+                    map[key] = canonicalKey
+                }
             }
         }
+
+        for group in frenchHomophoneGroups {
+            register(group)
+        }
+
+        for group in frenchNearSpeechGroups {
+            register(group)
+        }
+
+        for group in frenchStemChangingPresentGroups {
+            register(group)
+        }
+
+        for stem in frenchRegularERStems {
+            register(
+                [stem + "e", stem + "es", stem + "ent"],
+                canonical: stem + "e"
+            )
+            register(
+                [
+                    stem + "er",
+                    stem + "é",
+                    stem + "ée",
+                    stem + "és",
+                    stem + "ées",
+                    stem + "ez"
+                ],
+                canonical: stem + "er"
+            )
+        }
+
         return map
     }()
 
-    static func canonicalToken(_ raw: String) -> String {
+    static func canonicalToken(
+        _ raw: String,
+        course: LanguageCourse? = nil
+    ) -> String {
         var word = raw.lowercased()
 
         let containsArabic = word.unicodeScalars.contains { scalar in
@@ -2780,6 +3018,34 @@ private enum LessonSpeakNormalizer {
             return word
         }
 
+        if course == .french {
+            word = frenchLookupKey(word)
+
+            if let canonical = frenchVariantToCanonical[word] {
+                word = canonical
+            }
+
+            if let number = numberMap[word] {
+                return number
+            }
+
+            // -ais / -ait / -aient are the same ending in normal spoken French
+            // when attached to the same stem (imperfect and conditional).
+            word = frenchAISFamilyKey(word)
+
+            // Most noun/adjective plural -s/-x is silent in French. Keep a
+            // short exception list for high-frequency words where this would
+            // create a false pronunciation match.
+            if word.count > 3,
+               !frenchKeepFinalSOrX.contains(word),
+               word.hasSuffix("s") || word.hasSuffix("x") {
+                word.removeLast()
+            }
+
+            return word
+        }
+
+        // Preserve the app's previous behaviour for Spanish / other Latin text.
         word = word.folding(
             options: .diacriticInsensitive,
             locale: .current
@@ -2798,10 +3064,6 @@ private enum LessonSpeakNormalizer {
             word = number
         }
 
-        if let canonical = variantToCanonical[word] {
-            word = canonical
-        }
-
         if word.count > 3,
            word.hasSuffix("s") || word.hasSuffix("x") {
             word.removeLast()
@@ -2810,11 +3072,24 @@ private enum LessonSpeakNormalizer {
         return word
     }
 
-    static func transcriptTokenSet(_ transcript: String) -> Set<String> {
-        let cleaned = transcript
+    static func transcriptTokenSet(
+        _ transcript: String,
+        course: LanguageCourse? = nil
+    ) -> Set<String> {
+        var cleaned = transcript
             .lowercased()
-            .folding(options: .diacriticInsensitive, locale: .current)
             .replacingOccurrences(of: "’", with: "'")
+
+        if course == .french {
+            cleaned = collapseFrenchSpacedContractions(cleaned)
+        } else {
+            cleaned = cleaned.folding(
+                options: .diacriticInsensitive,
+                locale: .current
+            )
+        }
+
+        cleaned = cleaned
             .replacingOccurrences(
                 of: "[.,!?/()«»…:;]",
                 with: " ",
@@ -2832,17 +3107,20 @@ private enum LessonSpeakNormalizer {
             .map(String.init)
 
         let canonical = parts
-            .map { canonicalToken($0) }
+            .map { canonicalToken($0, course: course) }
             .filter { !$0.isEmpty }
 
         return Set(canonical)
     }
 
-    static func sentenceCanonicalTokensAlignedToWords(_ sentence: String) -> [String] {
+    static func sentenceCanonicalTokensAlignedToWords(
+        _ sentence: String,
+        course: LanguageCourse? = nil
+    ) -> [String] {
         sentence
             .split(whereSeparator: { $0.isWhitespace })
             .map(String.init)
-            .map { canonicalToken($0) }
+            .map { canonicalToken($0, course: course) }
     }
 
     static func importantIndices(for canonicalTokens: [String]) -> [Int] {
@@ -2850,6 +3128,56 @@ private enum LessonSpeakNormalizer {
             guard !token.isEmpty else { return nil }
             return stopWords.contains(token) ? nil : index
         }
+    }
+
+    private static func frenchLookupKey(_ raw: String) -> String {
+        raw
+            .lowercased()
+            .replacingOccurrences(of: "’", with: "'")
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: "œ", with: "oe")
+            .replacingOccurrences(of: "æ", with: "ae")
+            .replacingOccurrences(of: "ç", with: "c")
+            .replacingOccurrences(
+                of: "[^a-zàâäéèêëîïôöùûüÿ0-9]",
+                with: "",
+                options: .regularExpression
+            )
+    }
+
+    private static func frenchAISFamilyKey(_ word: String) -> String {
+        guard word.count > 5 else { return word }
+
+        if word.hasSuffix("aient") {
+            return String(word.dropLast(5)) + "ais"
+        }
+
+        if word.hasSuffix("ait") {
+            return String(word.dropLast(3)) + "ais"
+        }
+
+        return word
+    }
+
+    private static func collapseFrenchSpacedContractions(_ raw: String) -> String {
+        var text = raw
+
+        // Apple Speech occasionally emits "c est", "j ai", "qu en", etc.
+        // Collapse these back into one token so they align with the target
+        // token ("c'est", "j'ai", "qu'en"...).
+        text = text.replacingOccurrences(
+            of: "\\b([cdjlmnst])\\s+([\\p{L}]+)\\b",
+            with: "$1'$2",
+            options: .regularExpression
+        )
+
+        text = text.replacingOccurrences(
+            of: "\\b(qu|jusqu|lorsqu|puisqu)\\s+([\\p{L}]+)\\b",
+            with: "$1'$2",
+            options: .regularExpression
+        )
+
+        return text
     }
 }
 

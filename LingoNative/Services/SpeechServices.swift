@@ -100,19 +100,19 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
         let possibleURLs = [
             Bundle.main.url(
                 forResource: resourceName,
-                withExtension: "wav",
+                withExtension: "mp3",
                 subdirectory: "TopicData/HeadphoneCues"
             ),
             Bundle.main.url(
                 forResource: resourceName,
-                withExtension: "wav",
+                withExtension: "mp3",
                 subdirectory: "HeadphoneCues"
             ),
-            Bundle.main.url(forResource: resourceName, withExtension: "wav")
+            Bundle.main.url(forResource: resourceName, withExtension: "mp3")
         ]
 
         guard let url = possibleURLs.compactMap({ $0 }).first else {
-            print("⚠️ Bundled headphone cue not found: \(resourceName).wav")
+            print("⚠️ Bundled headphone cue not found: \(resourceName).mp3")
             return false
         }
 
