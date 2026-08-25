@@ -55,6 +55,11 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
             return
         }
 
+        if let cueName = Self.bundledEnglishCueName(for: cleaned),
+           playBundledCue(named: cueName, volume: volume) {
+            return
+        }
+
         speakWithSystemVoice(
             cleaned,
             localeIdentifier: "en-GB",
@@ -77,6 +82,72 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
         }
 
         isSpeaking = false
+    }
+
+    private static func bundledEnglishCueName(for text: String) -> String? {
+        switch text {
+        case "Correct!":
+            return "Correct"
+        case "Exercise done!":
+            return "Exercise_Finished"
+        default:
+            return nil
+        }
+    }
+
+    @discardableResult
+    private func playBundledCue(named resourceName: String, volume: Float) -> Bool {
+        let possibleURLs = [
+            Bundle.main.url(
+                forResource: resourceName,
+                withExtension: "wav",
+                subdirectory: "TopicData/HeadphoneCues"
+            ),
+            Bundle.main.url(
+                forResource: resourceName,
+                withExtension: "wav",
+                subdirectory: "HeadphoneCues"
+            ),
+            Bundle.main.url(forResource: resourceName, withExtension: "wav")
+        ]
+
+        guard let url = possibleURLs.compactMap({ $0 }).first else {
+            print("⚠️ Bundled headphone cue not found: \(resourceName).wav")
+            return false
+        }
+
+        do {
+            configureAudioSessionForTTS()
+
+            elevenLabsTask?.cancel()
+            elevenLabsTask = nil
+            elevenLabsPlayer?.stop()
+            elevenLabsPlayer = nil
+
+            if synthesizer.isSpeaking {
+                synthesizer.stopSpeaking(at: .immediate)
+            }
+
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = self
+            player.volume = max(0, min(volume, 1))
+            player.prepareToPlay()
+            elevenLabsPlayer = player
+            isSpeaking = true
+
+            guard player.play() else {
+                elevenLabsPlayer = nil
+                isSpeaking = false
+                return false
+            }
+
+            return true
+        } catch {
+            elevenLabsPlayer = nil
+            isSpeaking = false
+            print("⚠️ Bundled headphone cue playback error:", error.localizedDescription)
+            return false
+        }
     }
 
     private func speakArabicWithElevenLabs(_ text: String, rate: Double, volume: Float) {
@@ -450,7 +521,7 @@ final class SpeechRecognizerService: ObservableObject {
             return
         }
         guard recognizer.isAvailable else {
-            errorMessage = "Speech recognition is temporarily unavailable."
+            errorMessage = "Speech recognition is temporarily unavailable for this language."
             return
         }
 
@@ -732,4 +803,3 @@ final class ContinuousSpeechRecognizerService: ObservableObject {
         }
     }
 }
-
