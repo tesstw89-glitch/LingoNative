@@ -11,6 +11,8 @@
 		084267DE3037B89000636515 /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 084267DC3037B68100636515 /* llama.xcframework */; };
 		084267DF3037B89000636515 /* llama.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 084267DC3037B68100636515 /* llama.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		084267E23037BBF500636515 /* LocalLanguageJudge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 084267E13037BBF500636515 /* LocalLanguageJudge.swift */; };
+		086D9C38303DEAA50038C6F9 /* Correct.wav in Resources */ = {isa = PBXBuildFile; fileRef = 086D9C36303DEAA50038C6F9 /* Correct.wav */; };
+		086D9C39303DEAA50038C6F9 /* Exercise_Finished.wav in Resources */ = {isa = PBXBuildFile; fileRef = 086D9C37303DEAA50038C6F9 /* Exercise_Finished.wav */; };
 		08D3535230375B8E00E2A539 /* Fredoka-VariableFont_wdth,wght.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 08D3535130375B8E00E2A539 /* Fredoka-VariableFont_wdth,wght.ttf */; };
 		08D3535930375FBA00E2A539 /* Fredoka-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 08D3535830375FB900E2A539 /* Fredoka-SemiBold.ttf */; };
 		08D3535A30375FBA00E2A539 /* Fredoka-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 08D3535530375FB900E2A539 /* Fredoka-Light.ttf */; };
@@ -62,6 +64,8 @@
 		05A03738AD1B67DE97D9848A /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		084267DC3037B68100636515 /* llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = llama.xcframework; sourceTree = "<group>"; };
 		084267E13037BBF500636515 /* LocalLanguageJudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLanguageJudge.swift; sourceTree = "<group>"; };
+		086D9C36303DEAA50038C6F9 /* Correct.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Correct.wav; sourceTree = "<group>"; };
+		086D9C37303DEAA50038C6F9 /* Exercise_Finished.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Exercise_Finished.wav; sourceTree = "<group>"; };
 		08D3535130375B8E00E2A539 /* Fredoka-VariableFont_wdth,wght.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fredoka-VariableFont_wdth,wght.ttf"; sourceTree = "<group>"; };
 		08D3535330375CFE00E2A539 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		08D3535430375FB900E2A539 /* Fredoka-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fredoka-Bold.ttf"; sourceTree = "<group>"; };
@@ -174,6 +178,8 @@
 				084267DC3037B68100636515 /* llama.xcframework */,
 				08FB2D0B3039295800DCD571 /* NotoSansArabic-Medium.ttf */,
 				08FB2D0D303929AC00DCD571 /* NotoSansArabic-Regular.ttf */,
+				086D9C36303DEAA50038C6F9 /* Correct.wav */,
+				086D9C37303DEAA50038C6F9 /* Exercise_Finished.wav */,
 			);
 			sourceTree = "<group>";
 		};
@@ -281,6 +287,8 @@
 				08D3535230375B8E00E2A539 /* Fredoka-VariableFont_wdth,wght.ttf in Resources */,
 				08D3535930375FBA00E2A539 /* Fredoka-SemiBold.ttf in Resources */,
 				08D3535A30375FBA00E2A539 /* Fredoka-Light.ttf in Resources */,
+				086D9C38303DEAA50038C6F9 /* Correct.wav in Resources */,
+				086D9C39303DEAA50038C6F9 /* Exercise_Finished.wav in Resources */,
 				08D3535B30375FBA00E2A539 /* Fredoka-Bold.ttf in Resources */,
 				08D3535C30375FBA00E2A539 /* Fredoka-Medium.ttf in Resources */,
 				08D3535D30375FBA00E2A539 /* Fredoka-Regular.ttf in Resources */,
