@@ -1446,25 +1446,10 @@ private struct HeadphoneSpeakingPracticeView: View {
     private func activeView(_ current: PhraseEntry) -> some View {
         ScrollView {
             VStack(spacing: 20) {
-                HStack {
-                    Text("Question \(index + 1) / \(queue.count)")
-                        .font(.custom("Fredoka-Regular", size: 15))
-                        .foregroundStyle(Color.lingoMuted)
-                    Spacer()
-                    if speaker.isSpeaking {
-                        Label("Listen…", systemImage: "headphones")
-                            .font(.custom("Fredoka-Medium", size: 14))
-                            .foregroundStyle(Color.lingoBlue)
-                    } else if recognizer.isRecording {
-                        Label("Speak…", systemImage: "waveform")
-                            .font(.custom("Fredoka-Medium", size: 14))
-                            .foregroundStyle(Color.lingoPurple)
-                    } else if isTransitioning {
-                        Label("Correct", systemImage: "checkmark.circle.fill")
-                            .font(.custom("Fredoka-Medium", size: 14))
-                            .foregroundStyle(Color.lingoGreen)
-                    }
-                }
+                Text("Question \(index + 1) / \(queue.count)")
+                    .font(.custom("Fredoka-Regular", size: 15))
+                    .foregroundStyle(Color.lingoMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(spacing: 8) {
                     Text(current.english)
@@ -1484,25 +1469,6 @@ private struct HeadphoneSpeakingPracticeView: View {
                 .frame(maxWidth: .infinity)
                 .background(Color.lingoPurple)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-                if recognizer.isRecording {
-                    Text(recognizer.transcript.isEmpty
-                         ? "Listening for your answer…"
-                         : recognizer.transcript)
-                        .font(.custom("Fredoka-Regular", size: 16))
-                        .foregroundStyle(Color.lingoMuted)
-                        .multilineTextAlignment(.center)
-                }
-                if let error = recognizer.errorMessage {
-                    Text(error)
-                        .font(.custom("Fredoka-Regular", size: 14))
-                        .foregroundStyle(Color.lingoWrong)
-                        .multilineTextAlignment(.center)
-                }
-                Text("You can lock the screen now — no taps needed.")
-                    .font(.custom("Fredoka-Regular", size: 13))
-                    .foregroundStyle(Color.lingoMuted)
-                    .multilineTextAlignment(.center)
             }
             .padding(20)
             .padding(.bottom, 40)
