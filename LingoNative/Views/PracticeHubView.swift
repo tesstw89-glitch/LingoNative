@@ -115,19 +115,8 @@ struct PracticeHubView: View {
     @ViewBuilder
     private func practiceDestination(mode: PracticeMode, pool: [PhraseEntry]) -> some View {
         switch mode {
-        case .speaking:
-            LanguageTrainerSpeakingPracticeView(
-                course: corpus.course,
-                phrases: corpus.entries,
-                sessionLength: settings.sessionLength,
-                speechRate: settings.speechRate,
-                onFinished: { completedCount in
-                    progress.recordPracticeSession(
-                        earnedXP: max(10, completedCount * 5),
-                        restoreHeart: settings.heartsEnabled
-                    )
-                }
-            )
+        case .listening, .speaking:
+            phraseScopeChooser(mode: mode, allPhrases: pool)
 
         case .matching:
             LanguageTrainerLemmaMatchView(
@@ -143,13 +132,146 @@ struct PracticeHubView: View {
             )
 
         default:
-            // Listening deliberately stays in the existing LingoNative quiz UI. Its pool is
-            // corpus-wide below, and QuizViewModel treats that dedicated drill as stage-neutral.
             QuizView(
                 session: makeSession(mode: mode, pool: pool),
                 progress: progress,
                 settings: settings
             )
+        }
+    }
+
+    private func phraseScopeChooser(
+        mode: PracticeMode,
+        allPhrases: [PhraseEntry]
+    ) -> some View {
+        let studied = allPhrases.filter {
+            progress.learningStage(course: corpus.course, phrase: $0) != .unseen
+        }
+
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(mode.title.uppercased())
+                        .font(.custom("Fredoka-SemiBold", size: 13))
+                        .tracking(1.1)
+                        .foregroundStyle(Color.lingoMuted)
+
+                    Text("Which phrases?")
+                        .font(.custom("Fredoka-Medium", size: 24))
+                        .foregroundStyle(Color.lingoInk)
+
+                    Text("Choose how much of your corpus to practise.")
+                        .font(.custom("Fredoka-Regular", size: 15))
+                        .foregroundStyle(Color.lingoMuted)
+                }
+
+                phraseScopeLink(
+                    mode: mode,
+                    title: "All phrases",
+                    subtitle: "Practice from the whole corpus",
+                    count: allPhrases.count,
+                    phrases: allPhrases,
+                    systemImage: "books.vertical.fill"
+                )
+
+                phraseScopeLink(
+                    mode: mode,
+                    title: "Phrases studied so far",
+                    subtitle: "Only phrases you've already encountered",
+                    count: studied.count,
+                    phrases: studied,
+                    systemImage: "checkmark.circle.fill"
+                )
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle(mode.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func phraseScopeLink(
+        mode: PracticeMode,
+        title: String,
+        subtitle: String,
+        count: Int,
+        phrases: [PhraseEntry],
+        systemImage: String
+    ) -> some View {
+        let tint = accent(for: mode)
+
+        return NavigationLink {
+            scopedPracticeDestination(mode: mode, pool: phrases)
+        } label: {
+            HStack(spacing: 16) {
+                Image(systemName: systemImage)
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(tint)
+                    .frame(width: 54, height: 54)
+                    .background(tint.opacity(0.13))
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.custom("Fredoka-Medium", size: 19))
+                        .foregroundStyle(Color.lingoInk)
+
+                    Text(subtitle)
+                        .font(.custom("Fredoka-Regular", size: 15))
+                        .foregroundStyle(Color.lingoMuted)
+
+                    Text("\(count) phrase\(count == 1 ? "" : "s") available")
+                        .font(.custom("Fredoka-Medium", size: 13))
+                        .foregroundStyle(tint)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(Color.lingoMuted)
+            }
+            .padding(16)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.lingoLine, lineWidth: 2)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(count == 0)
+        .opacity(count == 0 ? 0.5 : 1)
+    }
+
+    @ViewBuilder
+    private func scopedPracticeDestination(
+        mode: PracticeMode,
+        pool: [PhraseEntry]
+    ) -> some View {
+        switch mode {
+        case .speaking:
+            LanguageTrainerSpeakingPracticeView(
+                course: corpus.course,
+                phrases: pool,
+                sessionLength: settings.sessionLength,
+                speechRate: settings.speechRate,
+                onFinished: { completedCount in
+                    progress.recordPracticeSession(
+                        earnedXP: max(10, completedCount * 5),
+                        restoreHeart: settings.heartsEnabled
+                    )
+                }
+            )
+
+        case .listening:
+            QuizView(
+                session: makeSession(mode: mode, pool: pool),
+                progress: progress,
+                settings: settings
+            )
+
+        default:
+            EmptyView()
         }
     }
 
@@ -324,7 +446,7 @@ struct PracticeHubView: View {
     private func subtitle(for mode: PracticeMode) -> String {
         switch mode {
         case .matching: return "Fast lemma matching"
-        case .speaking: return "Read, speak and watch the words light up"
+        case .listening, .speaking: return "Choose all phrases or studied so far"
         default: return mode.subtitle
         }
     }
