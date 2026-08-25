@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct UnitSectionView: View {
     let unit: LearningUnit
@@ -11,6 +12,12 @@ struct UnitSectionView: View {
     let allPhrases: [PhraseEntry]
     @ObservedObject var progress: ProgressStore
     @ObservedObject var settings: SettingsStore
+
+    @Environment(\.openURL) private var openURL
+
+    @State private var isPreparingChatGPT = false
+    @State private var showPromptError = false
+    @State private var promptErrorMessage = ""
 
     private let offsets: [CGFloat] = [0, 46, 72, 38, -16, -58, -76, -38]
 
@@ -78,6 +85,11 @@ struct UnitSectionView: View {
             }
             .padding(.vertical, 4)
         }
+        .alert("Couldn’t start ChatGPT practice", isPresented: $showPromptError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(promptErrorMessage)
+        }
     }
 
     private var topicHeader: some View {
@@ -98,7 +110,45 @@ struct UnitSectionView: View {
                     .font(.custom("Fredoka-Medium", size: 20))
                     .foregroundStyle(Color.lingoInk)
             }
-            Spacer()
+
+            Spacer(minLength: 8)
+
+            if ConversationPromptStore.supports(course: course, topicID: unit.topicID) {
+                Button(action: startChatGPTPractice) {
+                    VStack(spacing: 2) {
+                        HStack(spacing: 5) {
+                            if isPreparingChatGPT {
+                                ProgressView()
+                                    .controlSize(.mini)
+                                    .tint(topicAccent)
+                            } else {
+                                Image(systemName: "bubble.left.and.bubble.right.fill")
+                                    .font(.system(size: 12, weight: .bold))
+                            }
+
+                            Text(isPreparingChatGPT ? "PREPARING" : "PRACTISE")
+                                .font(.custom("Fredoka-SemiBold", size: 11))
+                                .tracking(0.4)
+                        }
+
+                        Text("with ChatGPT")
+                            .font(.custom("Fredoka-Regular", size: 10))
+                    }
+                    .foregroundStyle(topicAccent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(topicAccent.opacity(0.11))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(topicAccent.opacity(0.24), lineWidth: 1.5)
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(isPreparingChatGPT)
+                .accessibilityLabel("Practise \(unit.topicTitle) with ChatGPT")
+                .accessibilityHint("Copies a conversation prompt and opens ChatGPT")
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, sectionNumber == 1 ? 0 : 10)
@@ -170,6 +220,48 @@ struct UnitSectionView: View {
         }
     }
 
+    private func startChatGPTPractice() {
+        guard !isPreparingChatGPT else { return }
+        isPreparingChatGPT = true
+
+        Task {
+            do {
+                let prompt = try await ConversationPromptStore.shared.randomPrompt(
+                    course: course,
+                    topicID: unit.topicID
+                )
+
+                await MainActor.run {
+                    UIPasteboard.general.string = prompt
+                    isPreparingChatGPT = false
+
+                    guard let chatGPTURL = URL(string: "https://chatgpt.com/") else {
+                        showPromptFailure("ChatGPT couldn’t be opened.")
+                        return
+                    }
+
+                    openURL(chatGPTURL) { accepted in
+                        if !accepted {
+                            DispatchQueue.main.async {
+                                showPromptFailure("The prompt was copied, but ChatGPT couldn’t be opened. You can open ChatGPT manually and paste it.")
+                            }
+                        }
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isPreparingChatGPT = false
+                    showPromptFailure(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func showPromptFailure(_ message: String) {
+        promptErrorMessage = message
+        showPromptError = true
+    }
+
     private func isUnlocked(nodeIndex: Int) -> Bool {
         if unitIndex == 0 && nodeIndex == 0 { return true }
 
@@ -209,6 +301,199 @@ private extension QuizSession {
             exerciseTypes: exerciseTypes,
             completionNodeID: node.id
         )
+    }
+}
+
+/// Loads the standalone conversation prompts that are bundled inside TopicData.
+/// A tap selects a random prompt from the learner's current language + topic.
+private actor ConversationPromptStore {
+    static let shared = ConversationPromptStore()
+
+    private var cache: [LanguageCourse: [String: [String]]] = [:]
+    private var lastPromptIndex: [String: Int] = [:]
+
+    static func supports(course: LanguageCourse, topicID: String) -> Bool {
+        guard course == .french || course == .spanish else { return false }
+        return supportedTopicIDs.contains(topicID)
+    }
+
+    func randomPrompt(course: LanguageCourse, topicID: String) throws -> String {
+        guard Self.supports(course: course, topicID: topicID) else {
+            throw ConversationPromptError.unsupported
+        }
+
+        let bank: [String: [String]]
+        if let cached = cache[course] {
+            bank = cached
+        } else {
+            let loaded = try loadBank(for: course)
+            cache[course] = loaded
+            bank = loaded
+        }
+
+        guard let prompts = bank[topicID], !prompts.isEmpty else {
+            throw ConversationPromptError.noPrompts(topicID)
+        }
+
+        let historyKey = "\(course.rawValue):\(topicID)"
+        let previous = lastPromptIndex[historyKey]
+
+        let availableIndices: [Int]
+        if prompts.count > 1, let previous {
+            availableIndices = prompts.indices.filter { $0 != previous }
+        } else {
+            availableIndices = Array(prompts.indices)
+        }
+
+        guard let selectedIndex = availableIndices.randomElement() else {
+            throw ConversationPromptError.noPrompts(topicID)
+        }
+
+        lastPromptIndex[historyKey] = selectedIndex
+        return prompts[selectedIndex]
+    }
+
+    private func loadBank(for course: LanguageCourse) throws -> [String: [String]] {
+        let resourceName: String
+        switch course {
+        case .french:
+            resourceName = "LingoNative_French_All_Practice_Prompts"
+        case .spanish:
+            resourceName = "LingoNative_Spanish_All_Practice_Prompts"
+        case .arabic:
+            throw ConversationPromptError.unsupported
+        }
+
+        let possibleURLs = [
+            Bundle.main.url(
+                forResource: resourceName,
+                withExtension: "txt",
+                subdirectory: "TopicData/ConversationPrompts"
+            ),
+            Bundle.main.url(
+                forResource: resourceName,
+                withExtension: "txt",
+                subdirectory: "ConversationPrompts"
+            ),
+            Bundle.main.url(forResource: resourceName, withExtension: "txt")
+        ]
+
+        guard let url = possibleURLs.compactMap({ $0 }).first else {
+            throw ConversationPromptError.missingResource(course)
+        }
+
+        let text = try String(contentsOf: url, encoding: .utf8)
+        let parsed = parse(text)
+
+        guard !parsed.isEmpty else {
+            throw ConversationPromptError.invalidResource(course)
+        }
+
+        return parsed
+    }
+
+    private func parse(_ text: String) -> [String: [String]] {
+        let lines = text.components(separatedBy: .newlines)
+        var output: [String: [String]] = [:]
+        var currentTopicID: String?
+        var collectingPrompt = false
+        var promptLines: [String] = []
+
+        func flushPrompt() {
+            guard collectingPrompt, let currentTopicID else {
+                promptLines.removeAll(keepingCapacity: true)
+                return
+            }
+
+            let prompt = promptLines
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if !prompt.isEmpty {
+                output[currentTopicID, default: []].append(prompt)
+            }
+
+            promptLines.removeAll(keepingCapacity: true)
+        }
+
+        for rawLine in lines {
+            let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if trimmed.hasPrefix("### TOPIC:") {
+                flushPrompt()
+                collectingPrompt = false
+
+                let marker = String(trimmed.dropFirst("### TOPIC:".count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                currentTopicID = Self.topicID(forMarker: marker)
+                continue
+            }
+
+            guard currentTopicID != nil else { continue }
+
+            if trimmed.hasPrefix("PROMPT "), trimmed.contains(" — ") {
+                flushPrompt()
+                collectingPrompt = true
+                continue
+            }
+
+            guard collectingPrompt else { continue }
+
+            if Self.isDivider(trimmed) {
+                continue
+            }
+
+            promptLines.append(rawLine)
+        }
+
+        flushPrompt()
+        return output
+    }
+
+    private static func topicID(forMarker marker: String) -> String? {
+        switch marker.uppercased() {
+        case "OPINIONS": return "opinions"
+        case "CLOTHES & APPEARANCE": return "clothes"
+        case "PLACES": return "places"
+        case "GETTING AROUND": return "getting_around"
+        case "FOOD & MEALS": return "food"
+        default: return nil
+        }
+    }
+
+    private static func isDivider(_ line: String) -> Bool {
+        guard line.count >= 10 else { return false }
+        return line.allSatisfy { character in
+            character == "=" || character == "#"
+        }
+    }
+
+    private static let supportedTopicIDs: Set<String> = [
+        "opinions",
+        "clothes",
+        "places",
+        "getting_around",
+        "food"
+    ]
+}
+
+private enum ConversationPromptError: LocalizedError {
+    case unsupported
+    case missingResource(LanguageCourse)
+    case invalidResource(LanguageCourse)
+    case noPrompts(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupported:
+            return "ChatGPT conversation practice isn’t available for this topic yet."
+        case .missingResource(let course):
+            return "The \(course.title) conversation prompt bank isn’t bundled in this build yet."
+        case .invalidResource(let course):
+            return "The \(course.title) conversation prompt bank couldn’t be read."
+        case .noPrompts:
+            return "No conversation prompts were found for this topic."
+        }
     }
 }
 
