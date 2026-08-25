@@ -1,0 +1,14 @@
+.DS_Store
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.build/
+
+# Local llama framework - too large for GitHub
+llama.xcframework/
+
+# Local llama binary
+**/llama.xcframework/
+
+# Local llama binary
+**/llama.xcframework/
