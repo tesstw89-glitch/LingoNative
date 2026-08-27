@@ -11,6 +11,7 @@
 		084267DE3037B89000636515 /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 084267DC3037B68100636515 /* llama.xcframework */; };
 		084267DF3037B89000636515 /* llama.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 084267DC3037B68100636515 /* llama.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		084267E23037BBF500636515 /* LocalLanguageJudge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 084267E13037BBF500636515 /* LocalLanguageJudge.swift */; };
+		08542606303F7E5C00303A81 /* Fredoka-VariableFont_wdth,wght.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 08542605303F7E5C00303A81 /* Fredoka-VariableFont_wdth,wght.ttf */; };
 		086D9C40303DF1420038C6F9 /* Exercise_Finished.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 086D9C3F303DF1420038C6F9 /* Exercise_Finished.mp3 */; };
 		086D9C41303DF1420038C6F9 /* Correct.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 086D9C3E303DF1420038C6F9 /* Correct.mp3 */; };
 		08D3535230375B8E00E2A539 /* Fredoka-VariableFont_wdth,wght.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 08D3535130375B8E00E2A539 /* Fredoka-VariableFont_wdth,wght.ttf */; };
@@ -64,6 +65,7 @@
 		05A03738AD1B67DE97D9848A /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		084267DC3037B68100636515 /* llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = llama.xcframework; sourceTree = "<group>"; };
 		084267E13037BBF500636515 /* LocalLanguageJudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLanguageJudge.swift; sourceTree = "<group>"; };
+		08542605303F7E5C00303A81 /* Fredoka-VariableFont_wdth,wght.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fredoka-VariableFont_wdth,wght.ttf"; sourceTree = "<group>"; };
 		086D9C3E303DF1420038C6F9 /* Correct.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = Correct.mp3; sourceTree = "<group>"; };
 		086D9C3F303DF1420038C6F9 /* Exercise_Finished.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = Exercise_Finished.mp3; sourceTree = "<group>"; };
 		08D3535130375B8E00E2A539 /* Fredoka-VariableFont_wdth,wght.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fredoka-VariableFont_wdth,wght.ttf"; sourceTree = "<group>"; };
@@ -133,6 +135,7 @@
 				6C36FFE920F24CEDB7CFDBFC /* Assets.xcassets */,
 				16260C585190F1B74295BB31 /* ContentView.swift */,
 				E04D3A0690C3498C96DE5B24 /* LingoNativeApp.swift */,
+				08542605303F7E5C00303A81 /* Fredoka-VariableFont_wdth,wght.ttf */,
 				08D3535130375B8E00E2A539 /* Fredoka-VariableFont_wdth,wght.ttf */,
 			);
 			path = LingoNative;
@@ -284,6 +287,7 @@
 				08D3535F30377EB700E2A539 /* duolingo-correct.mp3 in Resources */,
 				08FB2D0E303929AC00DCD571 /* NotoSansArabic-Regular.ttf in Resources */,
 				086D9C40303DF1420038C6F9 /* Exercise_Finished.mp3 in Resources */,
+				08542606303F7E5C00303A81 /* Fredoka-VariableFont_wdth,wght.ttf in Resources */,
 				086D9C41303DF1420038C6F9 /* Correct.mp3 in Resources */,
 				08FB2D0C3039295800DCD571 /* NotoSansArabic-Medium.ttf in Resources */,
 				08D3535230375B8E00E2A539 /* Fredoka-VariableFont_wdth,wght.ttf in Resources */,

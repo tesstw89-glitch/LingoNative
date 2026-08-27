@@ -52,7 +52,7 @@ struct UnitSectionView: View {
                                         unit: unit,
                                         node: node,
                                         allPhrases: allPhrases,
-                                        exerciseTypes: settings.enabledExerciseTypes
+                                        exerciseTypes: settings.effectiveExerciseTypes
                                     ),
                                     progress: progress,
                                     settings: settings
@@ -179,7 +179,7 @@ struct UnitSectionView: View {
                             unit: unit,
                             node: activeNodeInUnit,
                             allPhrases: allPhrases,
-                            exerciseTypes: settings.enabledExerciseTypes
+                            exerciseTypes: settings.effectiveExerciseTypes
                         ),
                         progress: progress,
                         settings: settings
@@ -216,7 +216,13 @@ struct UnitSectionView: View {
         case "places": return Color.lingoOrange
         case "getting_around": return .teal
         case "opinions": return course == .french ? Color.lingoBlue : Color.lingoGreen
-        default: return Color.lingoBlue
+        case "food":
+            return Color.lingoBlue
+        case "requests_favours":
+            return Color.lingoPurple
+        default:
+            return Color.lingoBlue
+
         }
     }
 

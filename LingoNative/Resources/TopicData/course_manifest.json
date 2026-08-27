@@ -83,6 +83,21 @@
           "unitStrategy": "context"
         }
       }
+    },
+    {
+      "id": "requests_favours",
+      "title": "Requests & Favours",
+      "icon": "hand.raised.fill",
+      "resources": {
+        "french": {
+          "file": "french_requests_favours.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_requests_favours.json",
+          "unitStrategy": "context"
+        }
+      }
     }
   ]
 }

@@ -234,6 +234,10 @@ struct LearnPathView: View {
         case "places": return Color.lingoOrange
         case "getting_around": return .teal
         case "opinions": return corpus.course == .french ? Color.lingoBlue : Color.lingoGreen
+        case "food":
+            return Color.lingoBlue
+        case "requests_favours":
+            return Color.lingoPurple
         default: return Color.lingoBlue
         }
     }

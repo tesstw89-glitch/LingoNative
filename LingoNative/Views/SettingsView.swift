@@ -38,6 +38,17 @@ struct SettingsView: View {
                         .font(.custom("Fredoka-Regular", size: 16))
                 }
 
+
+                Toggle(isOn: $settings.nonHeadphoneModeEnabled) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Non-headphone mode")
+                            .font(.custom("Fredoka-Regular", size: 16))
+                        Text("No speaking, listening or listen & write exercises")
+                            .font(.custom("Fredoka-Regular", size: 13))
+                            .foregroundStyle(Color.lingoMuted)
+                    }
+                }
+
             } header: {
                 Text("Practice sessions")
                     .font(.custom("Fredoka-SemiBold", size: 13))
@@ -68,9 +79,17 @@ struct SettingsView: View {
                         Label(type.title, systemImage: type.systemImage)
                             .font(.custom("Fredoka-Regular", size: 16))
                     }
+                    .disabled(
+                        settings.nonHeadphoneModeEnabled
+                            && SettingsStore.audioRequiredExerciseTypes.contains(type)
+                    )
                 }
 
-                Text("New phrases are always introduced before testing. These switches control the exercise mix once a phrase is ready for that level of recall.")
+                Text(
+                    settings.nonHeadphoneModeEnabled
+                        ? "Non-headphone mode temporarily excludes Speaking, Listening and Listen & Write without changing your saved exercise mix."
+                        : "New phrases are always introduced before testing. These switches control the exercise mix once a phrase is ready for that level of recall."
+                )
                     .font(.custom("Fredoka-Regular", size: 13))
                     .foregroundStyle(Color.lingoMuted)
 
@@ -488,9 +507,17 @@ struct SettingsView: View {
     private func binding(for type: ExerciseType) -> Binding<Bool> {
         Binding(
             get: {
-                settings.enabledExerciseTypes.contains(type)
+                if settings.nonHeadphoneModeEnabled,
+                   SettingsStore.audioRequiredExerciseTypes.contains(type) {
+                    return false
+                }
+                return settings.enabledExerciseTypes.contains(type)
             },
             set: { newValue in
+                guard !settings.nonHeadphoneModeEnabled
+                        || !SettingsStore.audioRequiredExerciseTypes.contains(type)
+                else { return }
+
                 let contains =
                     settings.enabledExerciseTypes.contains(type)
 

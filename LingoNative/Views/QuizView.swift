@@ -2881,6 +2881,8 @@ private enum LessonSpeakNormalizer {
     // These are NOT claims that the words are linguistically identical.
     private static let frenchNearSpeechGroups: [[String]] = [
         ["dessus", "dessous"],
+        ["du", "deux"],
+        ["œufs", "eu", "eux"],
         ["des", "dès"],
         ["et", "est", "es", "ai"],
         ["ces", "ses", "sais", "sait", "c'est"],
@@ -2888,6 +2890,8 @@ private enum LessonSpeakNormalizer {
         ["un", "hein", "en", "an", "1"],
         ["si", "six", "6"],
         ["tout", "tous"],
+        ["cou", "coup"],
+        ["plutôt", "plus tôt"],
         ["plus", "plu"]
     ]
 
@@ -2988,7 +2992,7 @@ private enum LessonSpeakNormalizer {
         _ raw: String,
         course: LanguageCourse? = nil
     ) -> String {
-        var word = raw.lowercased()
+        var word = stripOptionalAgreementNotation(raw).lowercased()
 
         let containsArabic = word.unicodeScalars.contains { scalar in
             let value = scalar.value
@@ -3024,6 +3028,10 @@ private enum LessonSpeakNormalizer {
             if let canonical = frenchVariantToCanonical[word] {
                 word = canonical
             }
+
+            // Feminine/plural agreement after -é is silent in speech:
+            // garé / garée / garés / garées all sound the same.
+            word = frenchSilentAgreementKey(word)
 
             if let number = numberMap[word] {
                 return number
@@ -3143,6 +3151,24 @@ private enum LessonSpeakNormalizer {
                 with: "",
                 options: .regularExpression
             )
+    }
+
+    private static func stripOptionalAgreementNotation(_ text: String) -> String {
+        text.replacingOccurrences(
+            of: #"(?i)\((e|s|es)\)"#,
+            with: "",
+            options: .regularExpression
+        )
+    }
+
+    private static func frenchSilentAgreementKey(_ word: String) -> String {
+        if word.hasSuffix("ées") {
+            return String(word.dropLast(3)) + "é"
+        }
+        if word.hasSuffix("ée") || word.hasSuffix("és") {
+            return String(word.dropLast(2)) + "é"
+        }
+        return word
     }
 
     private static func frenchAISFamilyKey(_ word: String) -> String {

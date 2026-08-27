@@ -860,27 +860,6 @@ final class QuizViewModel: ObservableObject {
                 retry = Self.makeExactRetry(for: question)
             }
             questions.append(retry)
-        } else if !isArabicPairCheckpoint,
-                  status == .correct,
-                  session.completionNodeID != nil {
-            // The next scaffold step is only created after the previous one is actually cleared.
-            // That guarantees free writing cannot appear until two distinct non-writing successes exist.
-            let completed = Self.scaffoldSuccessCount(
-                phrase: question.phrase,
-                session: session,
-                progressStore: progressStore
-            )
-            if completed < LessonScaffoldExercise.allCases.count {
-                questions.append(
-                    Self.makeNextLessonScaffoldQuestion(
-                        phrase: question.phrase,
-                        completedCount: completed,
-                        index: questions.count,
-                        session: session,
-                        progressStore: progressStore
-                    )
-                )
-            }
         }
 
         if status != .unanswered {
@@ -2236,9 +2215,32 @@ final class QuizViewModel: ObservableObject {
         )
     }
     
+    /// Corpus forms such as "garé(e)" mean that the parenthetical agreement
+    /// ending is optional. Accept both "garé" and "garée"; never require "(e)".
+    private static func optionalAgreementForms(_ text: String) -> [String] {
+        let pattern = #"(?i)\((e|s|es)\)"#
+        let omitted = text.replacingOccurrences(
+            of: pattern,
+            with: "",
+            options: .regularExpression
+        )
+        let included = text.replacingOccurrences(
+            of: pattern,
+            with: "$1",
+            options: .regularExpression
+        )
+
+        if omitted == included {
+            return [text]
+        }
+
+        return Array(Set([omitted, included]))
+    }
+
     private static func slashAlternativeKeys(_ text: String) -> [String] {
         text
             .components(separatedBy: "/")
+            .flatMap { optionalAgreementForms($0) }
             .map { slashAlternativeKey($0) }
             .filter { !$0.isEmpty }
     }

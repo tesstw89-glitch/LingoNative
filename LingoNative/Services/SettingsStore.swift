@@ -25,11 +25,33 @@ final class SettingsStore: ObservableObject {
     @Published var speechRate: Double { didSet { save() } }
     @Published var darkModeEnabled: Bool { didSet { save() } }
     @Published var enhancedAnswerCheckingEnabled: Bool { didSet { save() } }
+    @Published var nonHeadphoneModeEnabled: Bool { didSet { save() } }
     @Published var enabledExerciseTypes: Set<ExerciseType> { didSet { save() } }
     @Published private(set) var editorNotes: [String: String] = [:]
 
     static let runtimeSoundDefaultsKey = "lingoNative.runtime.soundEnabled.v1"
     static let runtimeElevenLabsDefaultsKey = "lingoNative.runtime.elevenLabsEnabled.v1"
+
+
+    static let audioRequiredExerciseTypes: Set<ExerciseType> = [
+        .listening,
+        .listenWrite,
+        .speaking
+    ]
+
+    var effectiveExerciseTypes: Set<ExerciseType> {
+        guard nonHeadphoneModeEnabled else { return enabledExerciseTypes }
+
+        let filtered = enabledExerciseTypes.subtracting(Self.audioRequiredExerciseTypes)
+        if !filtered.isEmpty {
+            return filtered
+        }
+
+        // Elsewhere an empty set means "all exercise types", so never return
+        // empty while Non-headphone mode is active.
+        return Set(ExerciseType.userSelectableCases)
+            .subtracting(Self.audioRequiredExerciseTypes)
+    }
 
     static var runtimeSoundEnabled: Bool {
         let defaults = UserDefaults.standard
@@ -60,6 +82,7 @@ final class SettingsStore: ObservableObject {
         var speechRate: Double
         var darkModeEnabled: Bool?
         var enhancedAnswerCheckingEnabled: Bool?
+        var nonHeadphoneModeEnabled: Bool?
         var enabledExerciseTypes: Set<ExerciseType>
         var listenWriteIntroduced: Bool?
     }
@@ -86,6 +109,7 @@ final class SettingsStore: ObservableObject {
             speechRate = payload.speechRate
             darkModeEnabled = payload.darkModeEnabled ?? false
             enhancedAnswerCheckingEnabled = payload.enhancedAnswerCheckingEnabled ?? true
+            nonHeadphoneModeEnabled = payload.nonHeadphoneModeEnabled ?? false
             var selectable = payload.enabledExerciseTypes.intersection(Set(ExerciseType.userSelectableCases))
             if payload.listenWriteIntroduced != true {
                 selectable.insert(.listenWrite)
@@ -104,6 +128,7 @@ final class SettingsStore: ObservableObject {
             speechRate = 0.46
             darkModeEnabled = false
             enhancedAnswerCheckingEnabled = true
+            nonHeadphoneModeEnabled = false
             enabledExerciseTypes = Set(ExerciseType.userSelectableCases)
         }
 
@@ -124,6 +149,7 @@ final class SettingsStore: ObservableObject {
         speechRate = 0.46
         darkModeEnabled = false
         enhancedAnswerCheckingEnabled = true
+        nonHeadphoneModeEnabled = false
         enabledExerciseTypes = Set(ExerciseType.userSelectableCases)
         save()
     }
@@ -179,6 +205,7 @@ final class SettingsStore: ObservableObject {
             speechRate: speechRate,
             darkModeEnabled: darkModeEnabled,
             enhancedAnswerCheckingEnabled: enhancedAnswerCheckingEnabled,
+            nonHeadphoneModeEnabled: nonHeadphoneModeEnabled,
             enabledExerciseTypes: enabledExerciseTypes,
             listenWriteIntroduced: true
         )

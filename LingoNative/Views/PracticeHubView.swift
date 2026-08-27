@@ -17,7 +17,16 @@ struct PracticeHubView: View {
                         .foregroundStyle(Color.lingoMuted)
 
                     ForEach(PracticeMode.allCases) { mode in
-                        practiceLink(mode)
+                        if settings.nonHeadphoneModeEnabled {
+                            switch mode {
+                            case .listening, .speaking:
+                                EmptyView()
+                            default:
+                                practiceLink(mode)
+                            }
+                        } else {
+                            practiceLink(mode)
+                        }
                     }
 
                     vocabPracticeLink
@@ -304,6 +313,7 @@ struct PracticeHubView: View {
                 sessionLength: settings.sessionLength,
                 speechRate: settings.speechRate,
                 hapticsEnabled: settings.hapticsEnabled,
+                nonHeadphoneModeEnabled: settings.nonHeadphoneModeEnabled,
                 onFinished: { completedCount in
                     progress.recordPracticeSession(
                         earnedXP: max(10, completedCount * 5),
@@ -324,7 +334,11 @@ struct PracticeHubView: View {
                     Text("Practice Vocab")
                         .font(.custom("Fredoka-Medium", size: 18))
                         .foregroundStyle(Color.lingoInk)
-                    Text("Write or listen & write · lemmas only")
+                    Text(
+                        settings.nonHeadphoneModeEnabled
+                            ? "Multiple choice or write · lemmas only"
+                            : "Write or listen & write · lemmas only"
+                    )
                         .font(.custom("Fredoka-Regular", size: 15))
                         .foregroundStyle(Color.lingoMuted)
                     Text("\(count) lemma\(count == 1 ? "" : "s") available")
@@ -430,7 +444,7 @@ struct PracticeHubView: View {
         let types: Set<ExerciseType>
         switch mode {
         case .retention, .quick, .bookmarks, .mistakes, .weak:
-            types = settings.enabledExerciseTypes
+            types = settings.effectiveExerciseTypes
         case .typing:
             types = [.typing, .wordBank, .fillBlank]
         case .listening:
@@ -532,6 +546,7 @@ private struct VocabPracticeChooserView: View {
     let sessionLength: Int
     let speechRate: Double
     let hapticsEnabled: Bool
+    let nonHeadphoneModeEnabled: Bool
     let onFinished: (Int) -> Void
 
     var body: some View {
@@ -552,7 +567,9 @@ private struct VocabPracticeChooserView: View {
 
                 option(.multipleChoice, tint: .lingoGreen)
                 option(.write, tint: .lingoBlue)
-                option(.listenWrite, tint: .lingoGold)
+                if !nonHeadphoneModeEnabled {
+                    option(.listenWrite, tint: .lingoGold)
+                }
             }
             .padding(20)
         }
@@ -1469,6 +1486,19 @@ private struct HeadphoneSpeakingPracticeView: View {
                 .frame(maxWidth: .infinity)
                 .background(Color.lingoPurple)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                Button {
+                    skipCurrent()
+                } label: {
+                    Text("SKIP")
+                        .font(.custom("Fredoka-Medium", size: 15))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(DuoButtonStyle(
+                    fill: Color(.systemGray3),
+                    shadow: Color(.systemGray4)
+                ))
+                .disabled(isTransitioning)
             }
             .padding(20)
             .padding(.bottom, 40)
@@ -1560,6 +1590,40 @@ private struct HeadphoneSpeakingPracticeView: View {
 
         guard heardImportant == denominator.count else { return }
         finishCurrentCorrectly()
+    }
+
+    private func skipCurrent() {
+        guard hasStarted,
+              !isTransitioning,
+              current != nil else { return }
+
+        isTransitioning = true
+        recognizer.pauseRecognition()
+        speaker.stop()
+
+        runTask?.cancel()
+        runTask = Task { @MainActor in
+            guard !Task.isCancelled else { return }
+
+            if index + 1 >= queue.count {
+                reportRunIfNeeded()
+
+                speaker.speakEnglish("Exercise done!", rate: 0.48)
+                await waitForSpeechToFinish()
+
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+
+                speaker.preservesActiveAudioSession = false
+                recognizer.endSession()
+                hasStarted = false
+                onReturnToPractice()
+                return
+            }
+
+            index += 1
+            await playCurrentAndListen()
+        }
     }
 
     private func finishCurrentCorrectly() {
@@ -2286,8 +2350,17 @@ private enum PracticeTextNormalizer {
         "pero", "que", "lo", "se", "me", "te", "nos", "os", "mi", "su", "sus", "por", "para"
     ]
 
+    private static func stripOptionalAgreementNotation(_ text: String) -> String {
+        text.replacingOccurrences(
+            of: #"(?i)\((e|s|es)\)"#,
+            with: "",
+            options: .regularExpression
+        )
+    }
+
     static func key(_ text: String) -> String {
-        text.lowercased()
+        stripOptionalAgreementNotation(text)
+            .lowercased()
             .folding(options: .diacriticInsensitive, locale: .current)
             .replacingOccurrences(of: "’", with: "'")
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
@@ -2295,7 +2368,8 @@ private enum PracticeTextNormalizer {
     }
 
     static func cleanWordForSpeech(_ text: String) -> String {
-        text.trimmingCharacters(in: .punctuationCharacters.union(.symbols).union(.whitespacesAndNewlines))
+        stripOptionalAgreementNotation(text)
+            .trimmingCharacters(in: .punctuationCharacters.union(.symbols).union(.whitespacesAndNewlines))
     }
 
     static func alignedTokens(_ sentence: String, course: LanguageCourse) -> [String] {
@@ -2323,7 +2397,7 @@ private enum PracticeTextNormalizer {
     }
 
     private static func canonicalToken(_ raw: String, course: LanguageCourse) -> String {
-        var value = raw
+        var value = stripOptionalAgreementNotation(raw)
             .lowercased()
             .folding(options: .diacriticInsensitive, locale: .current)
             .replacingOccurrences(of: "’", with: "'")
@@ -2331,6 +2405,14 @@ private enum PracticeTextNormalizer {
             .replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
 
         if course == .french {
+            // After accent-folding, French -ée / -ées become -ee / -ees.
+            // Collapse those silent agreement spellings to the same spoken key.
+            if value.hasSuffix("ees") {
+                value = String(value.dropLast(3)) + "e"
+            } else if value.hasSuffix("ee") {
+                value = String(value.dropLast(2)) + "e"
+            }
+
             let homophones = [
                 "aux": "au", "ont": "on", "peux": "peu", "peut": "peu",
                 "sont": "son", "sans": "sang", "vingt": "vin"
