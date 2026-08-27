@@ -73,7 +73,9 @@ struct QuizView: View {
                             || question.type == .listenWrite
                             )
 
-                        if settings.autoplayAudio && shouldAutoplayTargetLanguage {
+                        if !settings.nonHeadphoneModeEnabled,
+                           settings.autoplayAudio,
+                           shouldAutoplayTargetLanguage {
                             try? await Task.sleep(nanoseconds: 250_000_000)
                             speaker.speak(
                                 question.phrase.foreign,

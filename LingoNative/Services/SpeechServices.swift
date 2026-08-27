@@ -82,6 +82,7 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
         }
 
         isSpeaking = false
+        releaseAudioSessionAfterTTS()
     }
 
     private static func bundledEnglishCueName(for text: String) -> String? {
@@ -370,6 +371,7 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
             guard let self else { return }
             if !self.synthesizer.isSpeaking {
                 self.isSpeaking = false
+                self.releaseAudioSessionAfterTTS()
             }
         }
     }
@@ -382,6 +384,7 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
             guard let self else { return }
             if !self.synthesizer.isSpeaking {
                 self.isSpeaking = false
+                self.releaseAudioSessionAfterTTS()
             }
         }
     }
@@ -394,23 +397,39 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
             guard let self else { return }
             if self.elevenLabsPlayer === player {
                 self.isSpeaking = false
+                self.releaseAudioSessionAfterTTS()
             }
         }
     }
 
     private func configureAudioSessionForTTS() {
         if preservesActiveAudioSession { return }
+
         let session = AVAudioSession.sharedInstance()
 
         do {
             try session.setCategory(
-                .playback,
-                mode: .spokenAudio,
-                options: [.duckOthers, .allowBluetooth, .mixWithOthers]
+                .ambient,
+                mode: .default,
+                options: []
             )
+
             try session.setActive(true)
         } catch {
             print("⚠️ Audio session (TTS) error:", error.localizedDescription)
+        }
+    }
+
+    private func releaseAudioSessionAfterTTS() {
+        guard !preservesActiveAudioSession else { return }
+
+        do {
+            try AVAudioSession.sharedInstance().setActive(
+                false,
+                options: .notifyOthersOnDeactivation
+            )
+        } catch {
+            print("⚠️ Audio session release error:", error.localizedDescription)
         }
     }
 
