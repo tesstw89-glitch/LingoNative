@@ -409,9 +409,9 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
 
         do {
             try session.setCategory(
-                .ambient,
+                .playback,
                 mode: .default,
-                options: []
+                options: [.mixWithOthers]
             )
 
             try session.setActive(true)

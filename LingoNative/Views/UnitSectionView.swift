@@ -232,6 +232,34 @@ struct UnitSectionView: View {
             return Color.lingoOrange
         case "tiny_social_interactions":
             return .teal
+        case "parenting":
+            return Color.lingoGreen
+        case "me":
+            return Color.lingoPurple
+        case "technology":
+            return .teal
+        case "household_life":
+            return Color.lingoOrange
+        case "family":
+            return Color.lingoGreen
+        case "asking_about_other_people":
+            return Color.lingoGreen
+        case "culture_entertainment":
+            return Color.lingoPurple
+        case "feelings":
+            return Color.lingoOrange
+        case "friends_social_life":
+            return .teal
+        case "hobbies_interests":
+            return Color.lingoGreen
+        case "money":
+            return Color.lingoOrange
+        case "offers_suggestions":
+            return Color.lingoPurple
+        case "problems":
+            return .teal
+        case "weather":
+            return Color.lingoGreen
         default:
             return Color.lingoBlue
 

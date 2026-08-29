@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct SettingsView: View {
     let course: LanguageCourse
@@ -7,6 +8,9 @@ struct SettingsView: View {
 
     @StateObject private var localAIModel = LocalAIModelStore.shared
     @State private var showResetConfirmation = false
+    @State private var showCacheConfirmation = false
+    @State private var cacheSizeText = "Calculating…"
+    @State private var cacheMessage: String?
     @State private var aiTestIsRunning = false
     @State private var aiColdResult: LocalAIJudgeResult?
     @State private var aiWarmResult: LocalAIJudgeResult?
@@ -375,6 +379,42 @@ struct SettingsView: View {
                     .font(.custom("Fredoka-SemiBold", size: 13))
             }
 
+            // MARK: - Storage & cache
+
+            Section {
+                HStack {
+                    Text("Cached data")
+                        .font(.custom("Fredoka-Regular", size: 16))
+
+                    Spacer()
+
+                    Text(cacheSizeText)
+                        .font(.custom("Fredoka-Medium", size: 15))
+                        .foregroundStyle(Color.lingoMuted)
+                }
+
+                Button {
+                    showCacheConfirmation = true
+                } label: {
+                    Text("Clean cache")
+                        .font(.custom("Fredoka-Medium", size: 16))
+                }
+
+                if let cacheMessage {
+                    Text(cacheMessage)
+                        .font(.custom("Fredoka-Regular", size: 13))
+                        .foregroundStyle(Color.lingoMuted)
+                }
+
+                Text("Removes generated ElevenLabs audio, temporary web cache and the in-memory course cache. Lesson progress, XP, streaks, phrase mastery, bookmarks, settings and the AI model are kept.")
+                    .font(.custom("Fredoka-Regular", size: 13))
+                    .foregroundStyle(Color.lingoMuted)
+
+            } header: {
+                Text("Storage & cache")
+                    .font(.custom("Fredoka-SemiBold", size: 13))
+            }
+
             // MARK: - Reset
 
             Section {
@@ -401,6 +441,24 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             localAIModel.refresh()
+            refreshCacheSize()
+        }
+        .confirmationDialog(
+            "Clean cached data?",
+            isPresented: $showCacheConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clean cache", role: .destructive) {
+                let cleared = AppCacheManager.clear()
+                CourseCorpusCache.shared.removeAll()
+                cacheSizeText = AppCacheManager.formattedSize()
+                cacheMessage = "Cleared \(AppCacheManager.formatted(bytes: cleared)). Lesson progress was kept."
+            }
+
+            Button("Cancel", role: .cancel) {}
+
+        } message: {
+            Text("This does NOT touch lesson progress. It removes generated ElevenLabs Arabic audio, so those phrases may need to be generated again and can use ElevenLabs credits. The downloaded AI model is kept.")
         }
         .confirmationDialog(
             "Reset all learning progress?",
@@ -416,6 +474,10 @@ struct SettingsView: View {
         } message: {
             Text("This clears lesson completion, saved lesson position, FSRS retention history, XP, streaks, phrase mastery, bookmarks and hearts on this device.")
         }
+    }
+
+    private func refreshCacheSize() {
+        cacheSizeText = AppCacheManager.formattedSize()
     }
 
     private func runLocalAITest() {
@@ -528,3 +590,64 @@ struct SettingsView: View {
         )
     }
 }
+
+private enum AppCacheManager {
+    private static var elevenLabsDirectory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ElevenLabsTTS", isDirectory: true)
+    }
+
+    static func sizeBytes() -> Int64 {
+        directorySize(at: elevenLabsDirectory)
+            + Int64(URLCache.shared.currentDiskUsage)
+    }
+
+    static func formattedSize() -> String {
+        formatted(bytes: sizeBytes())
+    }
+
+    static func formatted(bytes: Int64) -> String {
+        ByteCountFormatter.string(
+            fromByteCount: max(0, bytes),
+            countStyle: .file
+        )
+    }
+
+    @discardableResult
+    static func clear() -> Int64 {
+        let before = sizeBytes()
+
+        if FileManager.default.fileExists(atPath: elevenLabsDirectory.path) {
+            try? FileManager.default.removeItem(at: elevenLabsDirectory)
+        }
+
+        URLCache.shared.removeAllCachedResponses()
+        return before
+    }
+
+    private static func directorySize(at directory: URL) -> Int64 {
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return 0
+        }
+
+        var total: Int64 = 0
+
+        for case let fileURL as URL in enumerator {
+            guard let values = try? fileURL.resourceValues(
+                forKeys: [.isRegularFileKey, .fileSizeKey]
+            ),
+            values.isRegularFile == true else {
+                continue
+            }
+
+            total += Int64(values.fileSize ?? 0)
+        }
+
+        return total
+    }
+}
+

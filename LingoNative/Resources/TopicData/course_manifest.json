@@ -323,6 +323,81 @@
           "unitStrategy": "context"
         }
       }
+    },
+    {
+      "id": "parenting",
+      "title": "Children & Parenting",
+      "icon": "figure.and.child.holdinghands",
+      "resources": {
+        "french": {
+          "file": "french_parenting.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_parenting.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "me",
+      "title": "All About Me",
+      "icon": "person.crop.circle.fill",
+      "resources": {
+        "french": {
+          "file": "french_me.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_me.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "technology",
+      "title": "Technology",
+      "icon": "laptopcomputer",
+      "resources": {
+        "french": {
+          "file": "french_technology.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_technology.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "household_life",
+      "title": "Household Life",
+      "icon": "house.fill",
+      "resources": {
+        "french": {
+          "file": "french_household_life.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_household_life.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "family",
+      "title": "Family",
+      "icon": "person.3.fill",
+      "resources": {
+        "french": {
+          "file": "french_family.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_family.json",
+          "unitStrategy": "context"
+        }
+      }
     }
   ]
 }

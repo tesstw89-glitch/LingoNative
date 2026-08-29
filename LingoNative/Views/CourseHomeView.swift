@@ -79,12 +79,40 @@ struct CourseHomeView: View {
 
         .task {
             guard corpus == nil else { return }
+
+            if let cached = CourseCorpusCache.shared.corpus(for: course) {
+                corpus = cached
+                return
+            }
+
             do {
-                corpus = try CorpusLoader.load(course: course)
+                let loaded = try CorpusLoader.load(course: course)
+                CourseCorpusCache.shared.store(loaded, for: course)
+                corpus = loaded
             } catch {
                 loadError = error.localizedDescription
             }
         }
+    }
+}
+
+
+@MainActor
+final class CourseCorpusCache {
+    static let shared = CourseCorpusCache()
+
+    private var corpora: [LanguageCourse: Corpus] = [:]
+
+    func corpus(for course: LanguageCourse) -> Corpus? {
+        corpora[course]
+    }
+
+    func store(_ corpus: Corpus, for course: LanguageCourse) {
+        corpora[course] = corpus
+    }
+
+    func removeAll() {
+        corpora.removeAll(keepingCapacity: false)
     }
 }
 
