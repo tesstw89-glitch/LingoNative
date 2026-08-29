@@ -220,6 +220,18 @@ struct UnitSectionView: View {
             return Color.lingoBlue
         case "requests_favours":
             return Color.lingoPurple
+        case "shopping_errands":
+            return Color.lingoOrange
+        case "work":
+            return .teal
+        case "plans":
+            return Color.lingoGreen
+        case "storytelling":
+            return Color.lingoPurple
+        case "health_body":
+            return Color.lingoOrange
+        case "tiny_social_interactions":
+            return .teal
         default:
             return Color.lingoBlue
 

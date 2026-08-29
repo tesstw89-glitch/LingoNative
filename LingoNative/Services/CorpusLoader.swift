@@ -48,6 +48,7 @@ private struct RawPhraseEntry: Decodable {
     let lemmas: [Lemma]?
     let context: String
     let unit: String?
+    let unitID: FlexibleID?
 }
 
 private enum FlexibleID: Decodable {
@@ -104,31 +105,40 @@ enum CorpusLoader {
 
             var order: [String] = []
             var buckets: [String: [PhraseEntry]] = [:]
+            var unitTitles: [String: String] = [:]
+            var explicitUnitIDs: [String: String] = [:]
 
             for (index, entry) in entries.enumerated() {
                 let raw = rawEntries[index]
                 let unitTitle = raw.unit?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
                     ?? makeUnitTitle(context: entry.context, strategy: resource.unitStrategy)
+                let explicitUnitID = raw.unitID?.stringValue
+                let bucketKey = explicitUnitID.map { "id:\($0)" } ?? "title:\(unitTitle)"
 
-                if buckets[unitTitle] == nil {
-                    order.append(unitTitle)
-                    buckets[unitTitle] = []
+                if buckets[bucketKey] == nil {
+                    order.append(bucketKey)
+                    buckets[bucketKey] = []
+                    unitTitles[bucketKey] = unitTitle
+                    if let explicitUnitID {
+                        explicitUnitIDs[bucketKey] = explicitUnitID
+                    }
                 }
-                buckets[unitTitle, default: []].append(entry)
+                buckets[bucketKey, default: []].append(entry)
             }
 
-            let units = order.enumerated().map { index, title in
+            let units = order.enumerated().map { index, key in
+                let sourceUnitID = explicitUnitIDs[key] ?? String(index + 1)
                 let unitID = definition.id == "opinions"
-                    ? "\(course.rawValue)-unit-\(index + 1)"
-                    : "\(course.rawValue)-\(definition.id)-unit-\(index + 1)"
+                    ? "\(course.rawValue)-unit-\(sourceUnitID)"
+                    : "\(course.rawValue)-\(definition.id)-unit-\(sourceUnitID)"
 
                 return LearningUnit(
                     id: unitID,
-                    title: title,
+                    title: unitTitles[key] ?? "Everyday language",
                     topicID: definition.id,
                     topicTitle: definition.title,
                     topicIcon: definition.icon,
-                    phrases: buckets[title] ?? []
+                    phrases: buckets[key] ?? []
                 )
             }
 

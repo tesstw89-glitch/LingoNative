@@ -98,6 +98,231 @@
           "unitStrategy": "context"
         }
       }
+    },
+    {
+      "id": "shopping_errands",
+      "title": "Shopping & Errands",
+      "icon": "cart.fill",
+      "resources": {
+        "french": {
+          "file": "french_shopping_errands.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_shopping_errands.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "work",
+      "title": "Work",
+      "icon": "briefcase.fill",
+      "resources": {
+        "french": {
+          "file": "french_work.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_work.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "plans",
+      "title": "Plans",
+      "icon": "calendar",
+      "resources": {
+        "french": {
+          "file": "french_plans.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_plans.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "storytelling",
+      "title": "Storytelling",
+      "icon": "book.closed.fill",
+      "resources": {
+        "french": {
+          "file": "french_storytelling.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_storytelling.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "health_body",
+      "title": "Health & Body",
+      "icon": "heart.fill",
+      "resources": {
+        "french": {
+          "file": "french_health_body.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_health_body.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "tiny_social_interactions",
+      "title": "Tiny Social Interactions",
+      "icon": "hand.wave.fill",
+      "resources": {
+        "french": {
+          "file": "french_tiny_social_interactions.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_tiny_social_interactions.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "asking_about_other_people",
+      "title": "Asking About Other People",
+      "icon": "person.2.fill",
+      "resources": {
+        "french": {
+          "file": "french_asking_about_other_people.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_asking_about_other_people.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "culture_entertainment",
+      "title": "Culture & Entertainment",
+      "icon": "film.fill",
+      "resources": {
+        "french": {
+          "file": "french_culture_entertainment.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_culture_entertainment.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "feelings",
+      "title": "Feelings",
+      "icon": "face.smiling.fill",
+      "resources": {
+        "french": {
+          "file": "french_feelings.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_feelings.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "friends_social_life",
+      "title": "Friends & Social Life",
+      "icon": "person.2.fill",
+      "resources": {
+        "french": {
+          "file": "french_friends_social_life.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_friends_social_life.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "hobbies_interests",
+      "title": "Hobbies & Interests",
+      "icon": "star.fill",
+      "resources": {
+        "french": {
+          "file": "french_hobbies_interests.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_hobbies_interests.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "money",
+      "title": "Money",
+      "icon": "banknote.fill",
+      "resources": {
+        "french": {
+          "file": "french_money.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_money.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "offers_suggestions",
+      "title": "Offers & Suggestions",
+      "icon": "lightbulb.fill",
+      "resources": {
+        "french": {
+          "file": "french_offers_suggestions.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_offers_suggestions.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "problems",
+      "title": "Problems",
+      "icon": "exclamationmark.triangle.fill",
+      "resources": {
+        "french": {
+          "file": "french_problems.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_problems.json",
+          "unitStrategy": "context"
+        }
+      }
+    },
+    {
+      "id": "weather",
+      "title": "Weather",
+      "icon": "cloud.sun.fill",
+      "resources": {
+        "french": {
+          "file": "french_weather.json",
+          "unitStrategy": "context"
+        },
+        "spanish": {
+          "file": "spanish_weather.json",
+          "unitStrategy": "context"
+        }
+      }
     }
   ]
 }
