@@ -194,7 +194,21 @@ struct QuizView: View {
             viewModel.persistSnapshot(to: progress)
         }
         .onChange(of: viewModel.selectedWordIndices) { _, _ in
+#if DEBUG
+            let started = CFAbsoluteTimeGetCurrent()
             viewModel.persistSnapshot(to: progress)
+            let elapsedMS = (CFAbsoluteTimeGetCurrent() - started) * 1_000
+            if elapsedMS > 8.0 {
+                print(
+                    String(
+                        format: "⚠️ Word-bank snapshot %.1f ms",
+                        elapsedMS
+                    )
+                )
+            }
+#else
+            viewModel.persistSnapshot(to: progress)
+#endif
         }
         .onChange(of: viewModel.status) { _, newValue in
             guard settings.soundEnabled && settings.soundEffectsEnabled else { return }
@@ -255,7 +269,11 @@ struct QuizView: View {
         }
         .background(Color(.systemGroupedBackground))
         .safeAreaInset(edge: .bottom) {
-            feedbackBar(question: question)
+            if !(question.type == .speaking
+                 && session.completionNodeID != nil
+                 && viewModel.status == .unanswered) {
+                feedbackBar(question: question)
+            }
         }
             .onChange(of: viewModel.status) { _, newStatus in
                 guard newStatus != .unanswered else { return }
@@ -299,6 +317,11 @@ struct QuizView: View {
                         .buttonStyle(.plain)
                     }
                 }
+
+                StarButton(
+                    course: session.course,
+                    question: question
+                )
 
                 Spacer()
 
@@ -1372,7 +1395,9 @@ struct QuizView: View {
         Button {
             // Target-language tokens can be spoken with the course voice.
             // English comprehension tokens stay silent rather than using the wrong voice.
-            if question.direction == .englishToForeign && session.course != .arabic {
+            if settings.dragTokenAudioEnabled,
+               question.direction == .englishToForeign,
+               session.course != .arabic {
                 speaker.speak(
                     question.wordBankTokens[index],
                     course: session.course,
@@ -1399,7 +1424,9 @@ struct QuizView: View {
         Button {
             // Target-language tokens can be spoken with the course voice.
             // English comprehension tokens stay silent rather than using the wrong voice.
-            if question.direction == .englishToForeign && session.course != .arabic {
+            if settings.dragTokenAudioEnabled,
+               question.direction == .englishToForeign,
+               session.course != .arabic {
                 speaker.speak(
                     question.wordBankTokens[index],
                     course: session.course,
@@ -1870,6 +1897,14 @@ struct QuizView: View {
                 raw,
                 course: session.course
             )
+
+#if DEBUG
+        if session.course == .spanish {
+            print("🇪🇸 lesson STT raw:", raw)
+            print("🇪🇸 lesson target:", canonicalTokens)
+            print("🇪🇸 lesson heard:", heardSet.sorted())
+        }
+#endif
 
         var newRecognised = speakingRecognisedIndices
 
@@ -2990,6 +3025,83 @@ private enum LessonSpeakNormalizer {
         return map
     }()
 
+    // MARK: Spanish speech-to-text tolerance (Madrid / es-ES)
+    //
+    // Pronunciation / transcription tolerance only - not semantic synonyms.
+    // Madrid Spanish keeps distinción, so c/z are NOT collapsed with s.
+
+    private static let spanishNumberMap: [String: String] = [
+        "cero": "0",
+        "un": "1", "uno": "1", "una": "1",
+        "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5",
+        "seis": "6", "siete": "7", "ocho": "8", "nueve": "9",
+        "diez": "10", "once": "11", "doce": "12", "trece": "13",
+        "catorce": "14", "quince": "15", "dieciseis": "16",
+        "diecisiete": "17", "dieciocho": "18", "diecinueve": "19",
+        "veinte": "20", "treinta": "30", "cuarenta": "40",
+        "cincuenta": "50", "sesenta": "60", "setenta": "70",
+        "ochenta": "80", "noventa": "90",
+        "cien": "100", "ciento": "100", "mil": "1000"
+    ]
+
+    private static let spanishHomophoneGroups: [[String]] = [
+        ["a", "ha"],
+        ["cien", "100", "sien"],
+        ["asta", "hasta"],
+        ["echo", "hecho"],
+        ["hola", "ola"],
+        ["honda", "onda"],
+        ["huso", "uso"],
+        ["abría", "habría"],
+        ["haya", "aya", "halla"],
+        ["vaya", "valla", "baya"],
+        ["baca", "vaca"],
+        ["bello", "vello"],
+        ["barón", "varón"],
+        ["botar", "votar"],
+        ["grabar", "gravar"],
+        ["rebelar", "revelar"],
+        ["sabia", "savia"],
+        ["tubo", "tuvo"],
+        ["hierba", "hierva"],
+        ["pollo", "poyo"],
+        ["por", "x"]
+        
+        
+    ]
+
+    private static let spanishNearSpeechGroups: [[String]] = [
+        ["hay", "ay", "ahí"],
+        
+    ]
+
+    private static let spanishVariantToCanonical: [String: String] = {
+        var map: [String: String] = [:]
+
+        func register(_ forms: [String]) {
+            guard let first = forms.first else { return }
+            let canonical = spanishLookupKey(first)
+            guard !canonical.isEmpty else { return }
+
+            for form in forms {
+                let key = spanishLookupKey(form)
+                if !key.isEmpty {
+                    map[key] = canonical
+                }
+            }
+        }
+
+        for group in spanishHomophoneGroups {
+            register(group)
+        }
+
+        for group in spanishNearSpeechGroups {
+            register(group)
+        }
+
+        return map
+    }()
+
     static func canonicalToken(
         _ raw: String,
         course: LanguageCourse? = nil
@@ -3056,6 +3168,20 @@ private enum LessonSpeakNormalizer {
         }
 
         // Preserve the app's previous behaviour for Spanish / other Latin text.
+        if course == .spanish {
+            word = spanishLookupKey(word)
+
+            if let canonical = spanishVariantToCanonical[word] {
+                word = canonical
+            }
+
+            if let number = spanishNumberMap[word] {
+                return number
+            }
+
+            return word
+        }
+
         word = word.folding(
             options: .diacriticInsensitive,
             locale: .current
@@ -3092,6 +3218,8 @@ private enum LessonSpeakNormalizer {
 
         if course == .french {
             cleaned = collapseFrenchSpacedContractions(cleaned)
+        } else if course == .spanish {
+            cleaned = normalizeSpanishSpeechTranscript(cleaned)
         } else {
             cleaned = cleaned.folding(
                 options: .diacriticInsensitive,
@@ -3153,6 +3281,89 @@ private enum LessonSpeakNormalizer {
                 with: "",
                 options: .regularExpression
             )
+    }
+
+    private static func normalizeSpanishSpeechTranscript(_ raw: String) -> String {
+        var text = raw
+            .lowercased()
+            .replacingOccurrences(of: "’", with: "'")
+
+        // Apple Speech often renders spoken arithmetic-style Spanish as
+        // typography rather than words:
+        //   "mil por cien" -> "1000 × 100"
+        // or sometimes "1000 x 100".
+        //
+        // Convert that notation back to the spoken form BEFORE tokenisation.
+        text = text.replacingOccurrences(
+            of: "[×✕✖∙⋅·*]",
+            with: " por ",
+            options: .regularExpression
+        )
+
+        // Only treat a plain x as "por" when it is being used between numbers,
+        // so ordinary words/labels containing x are untouched.
+        text = text.replacingOccurrences(
+            of: #"(?<=\d)\s*[xX]\s*(?=\d)"#,
+            with: " por ",
+            options: .regularExpression
+        )
+
+        // A percentage sign is the written form of "por ciento".
+        // Canonical Spanish number handling already maps cien/ciento -> 100.
+        text = text.replacingOccurrences(
+            of: "%",
+            with: " por 100 "
+        )
+
+        // Keep grouped numbers together before the general punctuation pass:
+        // 1.000 / 1,000 -> 1000.
+        text = text.replacingOccurrences(
+            of: #"(?<=\d)[.,](?=\d{3}(?:\D|$))"#,
+            with: "",
+            options: .regularExpression
+        )
+
+        return text
+    }
+
+    private static func spanishLookupKey(_ raw: String) -> String {
+        var word = raw
+            .lowercased()
+            .replacingOccurrences(of: "’", with: "'")
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: "á", with: "a")
+            .replacingOccurrences(of: "é", with: "e")
+            .replacingOccurrences(of: "í", with: "i")
+            .replacingOccurrences(of: "ó", with: "o")
+            .replacingOccurrences(of: "ú", with: "u")
+            .replacingOccurrences(of: "ü", with: "u")
+
+        // Yeísmo is normal in Madrid.
+        word = word.replacingOccurrences(of: "ll", with: "y")
+
+        // Spanish b/v do not contrast phonemically.
+        word = word.replacingOccurrences(of: "v", with: "b")
+
+        // Preserve ch while removing silent h elsewhere.
+        word = word.replacingOccurrences(of: "ch", with: "§")
+        word = word.replacingOccurrences(of: "h", with: "")
+        word = word.replacingOccurrences(of: "§", with: "ch")
+
+        // g before e/i and j before e/i represent the same sound.
+        word = word.replacingOccurrences(of: "ge", with: "je")
+        word = word.replacingOccurrences(of: "gi", with: "ji")
+
+        word = word.replacingOccurrences(
+            of: "[^a-zñ0-9]",
+            with: "",
+            options: .regularExpression
+        )
+
+        if word.hasSuffix("y") {
+            word = String(word.dropLast()) + "i"
+        }
+
+        return word
     }
 
     private static func stripOptionalAgreementNotation(_ text: String) -> String {

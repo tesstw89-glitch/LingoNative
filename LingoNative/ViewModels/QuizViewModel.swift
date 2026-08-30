@@ -125,7 +125,7 @@ final class QuizViewModel: ObservableObject {
            let nodeID = session.completionNodeID,
            savedSession.nodeID == nodeID,
            savedSession.course == session.course,
-           savedSession.flowVersion == Self.lessonFlowVersion(for: session),
+           Self.savedLessonFlowIsCompatible(savedSession.flowVersion, session: session),
            !savedSession.questions.isEmpty,
            !savedSession.questions.contains(where: { $0.type == .introduction }) {
             questions = savedSession.questions
@@ -981,11 +981,37 @@ final class QuizViewModel: ObservableObject {
     }
 
     private static func lessonFlowVersion(for session: QuizSession) -> Int {
+        // A saved lesson should represent the learner's place in that lesson.
+        // Audio availability is a runtime preference, not a reason to throw the
+        // saved session away. Keep only structural lesson-shape changes here.
         lessonFlowVersionBase
             + (session.course == .arabic ? 1700 : 0)
-            + (criticalExerciseEnabled(.listening, in: session) ? 0 : 100)
-            + (criticalExerciseEnabled(.speaking, in: session) ? 0 : 200)
             + (session.isUnitReview ? 400 : 0)
+    }
+
+    private static func savedLessonFlowIsCompatible(
+        _ savedVersion: Int?,
+        session: QuizSession
+    ) -> Bool {
+        guard let savedVersion else { return false }
+
+        let stableVersion = lessonFlowVersion(for: session)
+
+        if savedVersion == stableVersion {
+            return true
+        }
+
+        // Migration for sessions saved before audio mode stopped being part
+        // of the flow version:
+        //   +100 = listening disabled
+        //   +200 = speaking disabled
+        //   +300 = both disabled (Non-headphone mode)
+        //
+        // Accepting these lets an in-progress lesson survive a Headphone /
+        // Non-headphone mode change instead of starting again at question 1.
+        return savedVersion == stableVersion + 100
+            || savedVersion == stableVersion + 200
+            || savedVersion == stableVersion + 300
     }
 
     private static func criticalExerciseEnabled(_ type: ExerciseType, in session: QuizSession) -> Bool {

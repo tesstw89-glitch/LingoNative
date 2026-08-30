@@ -277,6 +277,16 @@ struct SettingsView: View {
                         .font(.custom("Fredoka-Regular", size: 16))
                 }
 
+                Toggle(isOn: $settings.dragTokenAudioEnabled) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Word-bank token audio")
+                            .font(.custom("Fredoka-Regular", size: 16))
+                        Text("Speak tokens when interacting with the word bank")
+                            .font(.custom("Fredoka-Regular", size: 13))
+                            .foregroundStyle(Color.lingoMuted)
+                    }
+                }
+
                 Toggle(isOn: $settings.soundEffectsEnabled) {
                     Text("Sound effects")
                         .font(.custom("Fredoka-Regular", size: 16))

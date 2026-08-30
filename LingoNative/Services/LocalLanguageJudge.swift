@@ -580,6 +580,2479 @@ private final class LocalLlamaEngine {
     }
 }
 
+
+private enum SpanishSemanticLexicon {
+    // Tier 1: candidate semantic equivalents.
+    // These are hints for Qwen, NOT blind substitutions.
+    static let equivalents: [[String]] = [
+        [
+                "haber",
+                "existir"
+        ],
+        [
+                "pasar",
+                "ocurrir",
+                "suceder"
+        ],
+        [
+                "tener lugar",
+                "ocurrir",
+                "suceder"
+        ],
+        [
+                "aparecer",
+                "surgir"
+        ],
+        [
+                "desaparecer",
+                "esfumarse"
+        ],
+        [
+                "quedar",
+                "permanecer"
+        ],
+        [
+                "seguir",
+                "continuar"
+        ],
+        [
+                "empezar",
+                "comenzar"
+        ],
+        [
+                "arrancar",
+                "empezar"
+        ],
+        [
+                "iniciar",
+                "empezar"
+        ],
+        [
+                "terminar",
+                "acabar"
+        ],
+        [
+                "finalizar",
+                "terminar"
+        ],
+        [
+                "dejar de",
+                "parar de"
+        ],
+        [
+                "parar",
+                "detenerse"
+        ],
+        [
+                "cesar",
+                "parar"
+        ],
+        [
+                "hacer",
+                "realizar"
+        ],
+        [
+                "hacer",
+                "llevar a cabo"
+        ],
+        [
+                "preparar",
+                "hacer"
+        ],
+        [
+                "montar",
+                "organizar"
+        ],
+        [
+                "organizar",
+                "preparar"
+        ],
+        [
+                "crear",
+                "hacer"
+        ],
+        [
+                "fabricar",
+                "hacer"
+        ],
+        [
+                "conseguir",
+                "lograr"
+        ],
+        [
+                "conseguir",
+                "obtener"
+        ],
+        [
+                "obtener",
+                "lograr"
+        ],
+        [
+                "alcanzar",
+                "lograr"
+        ],
+        [
+                "sacar",
+                "obtener"
+        ],
+        [
+                "ganarse",
+                "conseguir"
+        ],
+        [
+                "intentar",
+                "tratar de"
+        ],
+        [
+                "probar",
+                "intentar"
+        ],
+        [
+                "hacer el intento",
+                "intentarlo"
+        ],
+        [
+                "querer",
+                "tener ganas de"
+        ],
+        [
+                "apetecer",
+                "tener ganas de"
+        ],
+        [
+                "preferir",
+                "gustar más"
+        ],
+        [
+                "encantar",
+                "gustar muchísimo"
+        ],
+        [
+                "gustar",
+                "agradar"
+        ],
+        [
+                "no gustar",
+                "desagradar"
+        ],
+        [
+                "necesitar",
+                "hacer falta"
+        ],
+        [
+                "hacer falta",
+                "ser necesario"
+        ],
+        [
+                "tener que",
+                "deber"
+        ],
+        [
+                "deber",
+                "haber que"
+        ],
+        [
+                "poder",
+                "ser capaz de"
+        ],
+        [
+                "saber",
+                "saber cómo"
+        ],
+        [
+                "conseguir",
+                "poder"
+        ],
+        [
+                "decidir",
+                "tomar una decisión"
+        ],
+        [
+                "elegir",
+                "escoger"
+        ],
+        [
+                "optar por",
+                "elegir"
+        ],
+        [
+                "quedarse con",
+                "elegir"
+        ],
+        [
+                "pensar",
+                "creer"
+        ],
+        [
+                "opinar",
+                "pensar"
+        ],
+        [
+                "considerar",
+                "pensar"
+        ],
+        [
+                "parecer",
+                "dar la impresión"
+        ],
+        [
+                "me parece",
+                "creo que"
+        ],
+        [
+                "diría que",
+                "creo que"
+        ],
+        [
+                "supongo",
+                "imagino"
+        ],
+        [
+                "imaginar",
+                "suponer"
+        ],
+        [
+                "dudar",
+                "no estar seguro"
+        ],
+        [
+                "estar seguro",
+                "tener claro"
+        ],
+        [
+                "saber",
+                "conocer"
+        ],
+        [
+                "entender",
+                "comprender"
+        ],
+        [
+                "darse cuenta",
+                "percatarse"
+        ],
+        [
+                "enterarse",
+                "saber"
+        ],
+        [
+                "averiguar",
+                "descubrir"
+        ],
+        [
+                "descubrir",
+                "enterarse de"
+        ],
+        [
+                "recordar",
+                "acordarse de"
+        ],
+        [
+                "olvidar",
+                "olvidarse de"
+        ],
+        [
+                "decir",
+                "comentar"
+        ],
+        [
+                "contar",
+                "decir"
+        ],
+        [
+                "explicar",
+                "contar"
+        ],
+        [
+                "mencionar",
+                "nombrar"
+        ],
+        [
+                "hablar",
+                "charlar"
+        ],
+        [
+                "charlar",
+                "conversar"
+        ],
+        [
+                "preguntar",
+                "hacer una pregunta"
+        ],
+        [
+                "responder",
+                "contestar"
+        ],
+        [
+                "repetir",
+                "volver a decir"
+        ],
+        [
+                "avisar",
+                "advertir"
+        ],
+        [
+                "informar",
+                "avisar"
+        ],
+        [
+                "aclarar",
+                "explicar"
+        ],
+        [
+                "pedir",
+                "solicitar"
+        ],
+        [
+                "pedir",
+                "encargar"
+        ],
+        [
+                "preguntar por",
+                "consultar"
+        ],
+        [
+                "pedir ayuda",
+                "solicitar ayuda"
+        ],
+        [
+                "dar",
+                "entregar"
+        ],
+        [
+                "dar",
+                "ofrecer"
+        ],
+        [
+                "regalar",
+                "dar"
+        ],
+        [
+                "prestar",
+                "dejar"
+        ],
+        [
+                "devolver",
+                "retornar"
+        ],
+        [
+                "llevar",
+                "traer"
+        ],
+        [
+                "coger",
+                "agarrar"
+        ],
+        [
+                "coger",
+                "tomar"
+        ],
+        [
+                "recoger",
+                "ir a buscar"
+        ],
+        [
+                "traer",
+                "llevar hasta aquí"
+        ],
+        [
+                "llevar",
+                "transportar"
+        ],
+        [
+                "poner",
+                "colocar"
+        ],
+        [
+                "meter",
+                "introducir"
+        ],
+        [
+                "sacar",
+                "extraer"
+        ],
+        [
+                "guardar",
+                "meter"
+        ],
+        [
+                "dejar",
+                "poner"
+        ],
+        [
+                "quitar",
+                "retirar"
+        ],
+        [
+                "buscar",
+                "tratar de encontrar"
+        ],
+        [
+                "encontrar",
+                "hallar"
+        ],
+        [
+                "localizar",
+                "encontrar"
+        ],
+        [
+                "mirar",
+                "ver"
+        ],
+        [
+                "observar",
+                "mirar"
+        ],
+        [
+                "echar un vistazo",
+                "mirar"
+        ],
+        [
+                "fijarse",
+                "prestar atención"
+        ],
+        [
+                "ver",
+                "notar"
+        ],
+        [
+                "notar",
+                "darse cuenta de"
+        ],
+        [
+                "percibir",
+                "notar"
+        ],
+        [
+                "reconocer",
+                "identificar"
+        ],
+        [
+                "ir",
+                "marcharse"
+        ],
+        [
+                "irse",
+                "marcharse"
+        ],
+        [
+                "venir",
+                "acercarse"
+        ],
+        [
+                "llegar",
+                "venir"
+        ],
+        [
+                "volver",
+                "regresar"
+        ],
+        [
+                "regresar",
+                "volver"
+        ],
+        [
+                "pasarse",
+                "venir"
+        ],
+        [
+                "acercarse",
+                "venir"
+        ],
+        [
+                "salir",
+                "marcharse"
+        ],
+        [
+                "entrar",
+                "meterse"
+        ],
+        [
+                "salir",
+                "irse"
+        ],
+        [
+                "irse de",
+                "salir de"
+        ],
+        [
+                "abandonar",
+                "irse de"
+        ],
+        [
+                "moverse",
+                "desplazarse"
+        ],
+        [
+                "viajar",
+                "desplazarse"
+        ],
+        [
+                "andar",
+                "caminar"
+        ],
+        [
+                "caminar",
+                "ir andando"
+        ],
+        [
+                "ir a pie",
+                "ir andando"
+        ],
+        [
+                "conducir",
+                "manejar"
+        ],
+        [
+                "coger el metro",
+                "ir en metro"
+        ],
+        [
+                "coger el autobús",
+                "ir en autobús"
+        ],
+        [
+                "vivir",
+                "residir"
+        ],
+        [
+                "quedarse",
+                "alojarse"
+        ],
+        [
+                "alojarse",
+                "hospedarse"
+        ],
+        [
+                "estar",
+                "quedarse"
+        ],
+        [
+                "trabajar",
+                "currar"
+        ],
+        [
+                "trabajo",
+                "curro"
+        ],
+        [
+                "empleo",
+                "trabajo"
+        ],
+        [
+                "jefe",
+                "responsable"
+        ],
+        [
+                "compañero",
+                "colega"
+        ],
+        [
+                "despedir",
+                "echar"
+        ],
+        [
+                "renunciar",
+                "dimitir"
+        ],
+        [
+                "dejar el trabajo",
+                "renunciar"
+        ],
+        [
+                "comprar",
+                "adquirir"
+        ],
+        [
+                "vender",
+                "poner a la venta"
+        ],
+        [
+                "pagar",
+                "abonar"
+        ],
+        [
+                "cobrar",
+                "recibir el pago"
+        ],
+        [
+                "costar",
+                "valer"
+        ],
+        [
+                "valer",
+                "costar"
+        ],
+        [
+                "gastar",
+                "gastarse"
+        ],
+        [
+                "ahorrar",
+                "guardar dinero"
+        ],
+        [
+                "tienda",
+                "comercio"
+        ],
+        [
+                "supermercado",
+                "súper"
+        ],
+        [
+                "rebaja",
+                "descuento"
+        ],
+        [
+                "oferta",
+                "promoción"
+        ],
+        [
+                "devolver",
+                "hacer una devolución"
+        ],
+        [
+                "cambiar",
+                "hacer un cambio"
+        ],
+        [
+                "probarse",
+                "probar"
+        ],
+        [
+                "comer",
+                "tomar"
+        ],
+        [
+                "beber",
+                "tomar"
+        ],
+        [
+                "desayunar",
+                "tomar el desayuno"
+        ],
+        [
+                "cenar",
+                "tomar la cena"
+        ],
+        [
+                "cocinar",
+                "preparar comida"
+        ],
+        [
+                "preparar",
+                "hacer"
+        ],
+        [
+                "calentar",
+                "recalentar"
+        ],
+        [
+                "enfriar",
+                "dejar enfriar"
+        ],
+        [
+                "sabor",
+                "gusto"
+        ],
+        [
+                "rico",
+                "bueno"
+        ],
+        [
+                "riquísimo",
+                "buenísimo"
+        ],
+        [
+                "delicioso",
+                "riquísimo"
+        ],
+        [
+                "casa",
+                "hogar"
+        ],
+        [
+                "piso",
+                "apartamento"
+        ],
+        [
+                "habitación",
+                "cuarto"
+        ],
+        [
+                "salón",
+                "sala de estar"
+        ],
+        [
+                "ordenar",
+                "recoger"
+        ],
+        [
+                "limpiar",
+                "asear"
+        ],
+        [
+                "ensuciar",
+                "manchar"
+        ],
+        [
+                "arreglar",
+                "reparar"
+        ],
+        [
+                "estropearse",
+                "romperse"
+        ],
+        [
+                "ropa",
+                "prendas"
+        ],
+        [
+                "ponerse",
+                "vestirse con"
+        ],
+        [
+                "quitarse",
+                "sacarse"
+        ],
+        [
+                "quedar bien",
+                "sentar bien"
+        ],
+        [
+                "quedar mal",
+                "sentar mal"
+        ],
+        [
+                "pegar",
+                "combinar"
+        ],
+        [
+                "combinar",
+                "hacer juego"
+        ],
+        [
+                "estar de moda",
+                "llevarse"
+        ],
+        [
+                "pasado de moda",
+                "anticuado"
+        ],
+        [
+                "guapo",
+                "atractivo"
+        ],
+        [
+                "bonito",
+                "precioso"
+        ],
+        [
+                "precioso",
+                "muy bonito"
+        ],
+        [
+                "feo",
+                "poco atractivo"
+        ],
+        [
+                "arreglado",
+                "bien vestido"
+        ],
+        [
+                "elegante",
+                "arreglado"
+        ],
+        [
+                "feliz",
+                "contento"
+        ],
+        [
+                "contento",
+                "alegre"
+        ],
+        [
+                "triste",
+                "deprimido"
+        ],
+        [
+                "enfadado",
+                "cabreado"
+        ],
+        [
+                "molesto",
+                "enfadado"
+        ],
+        [
+                "nervioso",
+                "ansioso"
+        ],
+        [
+                "preocupado",
+                "inquieto"
+        ],
+        [
+                "asustado",
+                "con miedo"
+        ],
+        [
+                "tener miedo",
+                "estar asustado"
+        ],
+        [
+                "cansado",
+                "agotado"
+        ],
+        [
+                "agotado",
+                "reventado"
+        ],
+        [
+                "aburrido",
+                "harto"
+        ],
+        [
+                "emocionado",
+                "ilusionado"
+        ],
+        [
+                "ilusionado",
+                "con ganas"
+        ],
+        [
+                "tranquilo",
+                "relajado"
+        ],
+        [
+                "relajarse",
+                "tranquilizarse"
+        ],
+        [
+                "calmarse",
+                "tranquilizarse"
+        ],
+        [
+                "estar malo",
+                "estar enfermo"
+        ],
+        [
+                "ponerse malo",
+                "enfermar"
+        ],
+        [
+                "me duele",
+                "tengo dolor de"
+        ],
+        [
+                "dolor",
+                "molestia"
+        ],
+        [
+                "mareado",
+                "con mareo"
+        ],
+        [
+                "catarro",
+                "resfriado"
+        ],
+        [
+                "medicamento",
+                "medicina"
+        ],
+        [
+                "médico",
+                "doctor"
+        ],
+        [
+                "cita",
+                "consulta"
+        ],
+        [
+                "fácil",
+                "sencillo"
+        ],
+        [
+                "difícil",
+                "complicado"
+        ],
+        [
+                "complicado",
+                "difícil"
+        ],
+        [
+                "simple",
+                "sencillo"
+        ],
+        [
+                "lioso",
+                "complicado"
+        ],
+        [
+                "bueno",
+                "estupendo"
+        ],
+        [
+                "genial",
+                "estupendo"
+        ],
+        [
+                "fantástico",
+                "genial"
+        ],
+        [
+                "perfecto",
+                "ideal"
+        ],
+        [
+                "malo",
+                "terrible"
+        ],
+        [
+                "horrible",
+                "fatal"
+        ],
+        [
+                "fatal",
+                "muy mal"
+        ],
+        [
+                "regular",
+                "así así"
+        ],
+        [
+                "grande",
+                "enorme"
+        ],
+        [
+                "enorme",
+                "gigante"
+        ],
+        [
+                "pequeño",
+                "chico"
+        ],
+        [
+                "minúsculo",
+                "muy pequeño"
+        ],
+        [
+                "rápido",
+                "veloz"
+        ],
+        [
+                "deprisa",
+                "rápido"
+        ],
+        [
+                "lentamente",
+                "despacio"
+        ],
+        [
+                "lento",
+                "pausado"
+        ],
+        [
+                "cerca",
+                "al lado"
+        ],
+        [
+                "cerca de",
+                "próximo a"
+        ],
+        [
+                "lejos",
+                "a distancia"
+        ],
+        [
+                "al lado",
+                "junto a"
+        ],
+        [
+                "lleno",
+                "a tope"
+        ],
+        [
+                "vacío",
+                "sin nada"
+        ],
+        [
+                "abarrotado",
+                "lleno"
+        ],
+        [
+                "petado",
+                "lleno"
+        ],
+        [
+                "muchos",
+                "un montón de"
+        ],
+        [
+                "muchísimo",
+                "un montón"
+        ],
+        [
+                "pocos",
+                "no muchos"
+        ],
+        [
+                "bastantes",
+                "unos cuantos"
+        ],
+        [
+                "unos cuantos",
+                "varios"
+        ],
+        [
+                "a veces",
+                "de vez en cuando"
+        ],
+        [
+                "de vez en cuando",
+                "alguna vez"
+        ],
+        [
+                "normalmente",
+                "por lo general"
+        ],
+        [
+                "generalmente",
+                "normalmente"
+        ],
+        [
+                "a menudo",
+                "frecuentemente"
+        ],
+        [
+                "muchas veces",
+                "a menudo"
+        ],
+        [
+                "siempre",
+                "todo el rato"
+        ],
+        [
+                "nunca",
+                "jamás"
+        ],
+        [
+                "ahora",
+                "ahora mismo"
+        ],
+        [
+                "enseguida",
+                "ahora mismo"
+        ],
+        [
+                "luego",
+                "más tarde"
+        ],
+        [
+                "después",
+                "más tarde"
+        ],
+        [
+                "antes",
+                "previamente"
+        ],
+        [
+                "hace poco",
+                "recientemente"
+        ],
+        [
+                "otra vez",
+                "de nuevo"
+        ],
+        [
+                "volver a",
+                "hacer otra vez"
+        ],
+        [
+                "quizá",
+                "quizás"
+        ],
+        [
+                "a lo mejor",
+                "quizá"
+        ],
+        [
+                "puede que",
+                "a lo mejor"
+        ],
+        [
+                "igual",
+                "a lo mejor"
+        ],
+        [
+                "muy",
+                "súper"
+        ],
+        [
+                "muy",
+                "realmente"
+        ],
+        [
+                "realmente",
+                "de verdad"
+        ],
+        [
+                "de verdad",
+                "en serio"
+        ],
+        [
+                "totalmente",
+                "completamente"
+        ],
+        [
+                "completamente",
+                "del todo"
+        ],
+        [
+                "exactamente",
+                "justo"
+        ],
+        [
+                "más o menos",
+                "aproximadamente"
+        ],
+        [
+                "aproximadamente",
+                "alrededor de"
+        ],
+        [
+                "casi",
+                "prácticamente"
+        ],
+        [
+                "también",
+                "además"
+        ],
+        [
+                "además",
+                "encima"
+        ],
+        [
+                "tampoco",
+                "ni tampoco"
+        ],
+        [
+                "pero",
+                "aunque"
+        ],
+        [
+                "sin embargo",
+                "pero"
+        ],
+        [
+                "aun así",
+                "sin embargo"
+        ],
+        [
+                "de todas formas",
+                "de todos modos"
+        ],
+        [
+                "porque",
+                "ya que"
+        ],
+        [
+                "como",
+                "puesto que"
+        ],
+        [
+                "por eso",
+                "por ese motivo"
+        ],
+        [
+                "así que",
+                "por eso"
+        ],
+        [
+                "vale",
+                "de acuerdo"
+        ],
+        [
+                "de acuerdo",
+                "está bien"
+        ],
+        [
+                "claro",
+                "por supuesto"
+        ],
+        [
+                "desde luego",
+                "por supuesto"
+        ],
+        [
+                "exacto",
+                "eso es"
+        ],
+        [
+                "totalmente",
+                "desde luego"
+        ],
+        [
+                "no estoy de acuerdo",
+                "no lo veo así"
+        ],
+        [
+                "no me convence",
+                "no lo veo"
+        ],
+        [
+                "ni de broma",
+                "de ninguna manera"
+        ],
+        [
+                "para nada",
+                "en absoluto"
+        ],
+        [
+                "seguro",
+                "sin duda"
+        ],
+        [
+                "sin duda",
+                "desde luego"
+        ],
+        [
+                "obviamente",
+                "evidentemente"
+        ],
+        [
+                "está claro",
+                "es evidente"
+        ],
+        [
+                "qué raro",
+                "qué extraño"
+        ],
+        [
+                "qué fuerte",
+                "madre mía"
+        ],
+        [
+                "no me digas",
+                "en serio"
+        ],
+        [
+                "anda",
+                "vaya"
+        ],
+        [
+                "me encanta",
+                "me flipa"
+        ],
+        [
+                "me gusta mucho",
+                "me encanta"
+        ],
+        [
+                "me mola",
+                "me gusta"
+        ],
+        [
+                "no me gusta nada",
+                "lo odio"
+        ],
+        [
+                "no lo soporto",
+                "lo odio"
+        ],
+        [
+                "me da igual",
+                "me es indiferente"
+        ],
+        [
+                "importante",
+                "fundamental"
+        ],
+        [
+                "esencial",
+                "fundamental"
+        ],
+        [
+                "necesario",
+                "imprescindible"
+        ],
+        [
+                "da igual",
+                "no importa"
+        ],
+        [
+                "problema",
+                "inconveniente"
+        ],
+        [
+                "problema",
+                "lío"
+        ],
+        [
+                "lío",
+                "jaleo"
+        ],
+        [
+                "fallo",
+                "error"
+        ],
+        [
+                "equivocarse",
+                "cometer un error"
+        ],
+        [
+                "arreglar",
+                "solucionar"
+        ],
+        [
+                "resolver",
+                "solucionar"
+        ],
+        [
+                "ayudar",
+                "echar una mano"
+        ],
+        [
+                "echar una mano",
+                "ayudar"
+        ],
+        [
+                "apoyar",
+                "respaldar"
+        ],
+        [
+                "esperar",
+                "aguardar"
+        ],
+        [
+                "espera",
+                "un momento"
+        ],
+        [
+                "un segundo",
+                "un momento"
+        ],
+        [
+                "date prisa",
+                "apúrate"
+        ],
+        [
+                "rápido",
+                "deprisa"
+        ],
+        [
+                "quedar",
+                "verse"
+        ],
+        [
+                "ver a alguien",
+                "quedar con alguien"
+        ],
+        [
+                "conocer a alguien",
+                "presentarse"
+        ],
+        [
+                "reunirse",
+                "quedar"
+        ],
+        [
+                "salir",
+                "ir de fiesta"
+        ],
+        [
+                "tomar algo",
+                "quedar para tomar algo"
+        ],
+        [
+                "amigo",
+                "colega"
+        ],
+        [
+                "colega",
+                "amigo"
+        ],
+        [
+                "pareja",
+                "novio"
+        ],
+        [
+                "pareja",
+                "novia"
+        ],
+        [
+                "niño",
+                "peque"
+        ],
+        [
+                "niña",
+                "peque"
+        ],
+        [
+                "hijo",
+                "niño"
+        ],
+        [
+                "padres",
+                "padre y madre"
+        ],
+        [
+                "abuelos",
+                "abuelo y abuela"
+        ],
+        [
+                "hace frío",
+                "está frío"
+        ],
+        [
+                "hace calor",
+                "está haciendo calor"
+        ],
+        [
+                "llueve",
+                "está lloviendo"
+        ],
+        [
+                "hace sol",
+                "está soleado"
+        ],
+        [
+                "está nublado",
+                "hay nubes"
+        ],
+        [
+                "hace viento",
+                "hay viento"
+        ],
+        [
+                "tarde",
+                "con retraso"
+        ],
+        [
+                "retrasarse",
+                "llegar tarde"
+        ],
+        [
+                "puntual",
+                "a tiempo"
+        ],
+        [
+                "a tiempo",
+                "con tiempo"
+        ],
+        [
+                "estar libre",
+                "estar disponible"
+        ],
+        [
+                "estar ocupado",
+                "tener cosas que hacer"
+        ],
+        [
+                "tener tiempo",
+                "estar libre"
+        ],
+        [
+                "caro",
+                "costoso"
+        ],
+        [
+                "barato",
+                "económico"
+        ],
+        [
+                "gratis",
+                "gratuito"
+        ],
+        [
+                "rebajado",
+                "con descuento"
+        ],
+        [
+                "nuevo",
+                "a estrenar"
+        ],
+        [
+                "usado",
+                "de segunda mano"
+        ],
+        [
+                "roto",
+                "estropeado"
+        ],
+        [
+                "en buen estado",
+                "bien conservado"
+        ],
+        [
+                "dinero",
+                "pasta"
+        ],
+        [
+                "cosa",
+                "tema"
+        ],
+        [
+                "problema",
+                "movida"
+        ],
+        [
+                "fiesta",
+                "juerga"
+        ],
+        [
+                "cansado",
+                "hecho polvo"
+        ],
+        [
+                "mucho trabajo",
+                "un montón de curro"
+        ],
+        [
+                "muy bueno",
+                "brutal"
+        ],
+        [
+                "muy bueno",
+                "increíble"
+        ],
+        [
+                "muy bonito",
+                "una pasada"
+        ],
+        [
+                "muy impresionante",
+                "una pasada"
+        ],
+        [
+                "estar lleno",
+                "estar a tope"
+        ],
+        [
+                "estar muy ocupado",
+                "estar a tope"
+        ],
+        [
+                "irse",
+                "pirarse"
+        ],
+        [
+                "irse",
+                "largarse"
+        ],
+        [
+                "quedarse",
+                "plantarse"
+        ],
+        [
+                "entender",
+                "pillar"
+        ],
+        [
+                "darse cuenta",
+                "caer en la cuenta"
+        ],
+        [
+                "enfadarse",
+                "cabrearse"
+        ],
+        [
+                "molestar",
+                "fastidiar"
+        ],
+        [
+                "estropear",
+                "fastidiar"
+        ],
+        [
+                "engañar",
+                "timar"
+        ],
+        [
+                "mentir",
+                "decir una mentira"
+        ]
+]
+
+    // Tier 2: contextual near-synonyms.
+    // These are NEVER automatic equivalence.
+    static let contextual: [[String]] = [
+        [
+                "poner",
+                "dejar"
+        ],
+        [
+                "poner",
+                "meter"
+        ],
+        [
+                "llevar",
+                "traer"
+        ],
+        [
+                "ir",
+                "venir"
+        ],
+        [
+                "mirar",
+                "ver"
+        ],
+        [
+                "oír",
+                "escuchar"
+        ],
+        [
+                "saber",
+                "conocer"
+        ],
+        [
+                "pedir",
+                "preguntar"
+        ],
+        [
+                "decir",
+                "contar"
+        ],
+        [
+                "hablar",
+                "decir"
+        ],
+        [
+                "pensar",
+                "creer"
+        ],
+        [
+                "pensar",
+                "opinar"
+        ],
+        [
+                "creer",
+                "suponer"
+        ],
+        [
+                "imaginar",
+                "pensar"
+        ],
+        [
+                "parecer",
+                "ser"
+        ],
+        [
+                "quedar",
+                "estar"
+        ],
+        [
+                "ser",
+                "estar"
+        ],
+        [
+                "tener",
+                "llevar"
+        ],
+        [
+                "hacer",
+                "poner"
+        ],
+        [
+                "quitar",
+                "sacar"
+        ],
+        [
+                "dejar",
+                "permitir"
+        ],
+        [
+                "dejar",
+                "abandonar"
+        ],
+        [
+                "volver",
+                "regresar"
+        ],
+        [
+                "volver",
+                "venir otra vez"
+        ],
+        [
+                "quedarse",
+                "seguir"
+        ],
+        [
+                "parar",
+                "dejar"
+        ],
+        [
+                "terminar",
+                "dejar"
+        ],
+        [
+                "probar",
+                "intentar"
+        ],
+        [
+                "probar",
+                "comprobar"
+        ],
+        [
+                "conseguir",
+                "ganar"
+        ],
+        [
+                "ganar",
+                "obtener"
+        ],
+        [
+                "perder",
+                "dejar"
+        ],
+        [
+                "faltar",
+                "perder"
+        ],
+        [
+                "pasar",
+                "estar"
+        ],
+        [
+                "pasar",
+                "cruzar"
+        ],
+        [
+                "pasar",
+                "ocurrir"
+        ],
+        [
+                "salir",
+                "resultar"
+        ],
+        [
+                "salir",
+                "irse"
+        ],
+        [
+                "salir",
+                "aparecer"
+        ],
+        [
+                "entrar",
+                "caber"
+        ],
+        [
+                "entrar",
+                "meterse"
+        ],
+        [
+                "tocar",
+                "corresponder"
+        ],
+        [
+                "tocar",
+                "tener que"
+        ],
+        [
+                "quedar",
+                "sentar"
+        ],
+        [
+                "sentar",
+                "quedar"
+        ],
+        [
+                "funcionar",
+                "ir"
+        ],
+        [
+                "ir bien",
+                "funcionar"
+        ],
+        [
+                "venir bien",
+                "ser útil"
+        ],
+        [
+                "servir",
+                "valer"
+        ],
+        [
+                "valer",
+                "servir"
+        ],
+        [
+                "valer",
+                "costar"
+        ],
+        [
+                "dar",
+                "producir"
+        ],
+        [
+                "dar",
+                "causar"
+        ],
+        [
+                "hacer ilusión",
+                "apetecer"
+        ],
+        [
+                "apetecer",
+                "gustar"
+        ],
+        [
+                "gustar",
+                "encantar"
+        ],
+        [
+                "molestar",
+                "fastidiar"
+        ],
+        [
+                "molestar",
+                "incomodar"
+        ],
+        [
+                "preocupar",
+                "inquietar"
+        ],
+        [
+                "dar miedo",
+                "asustar"
+        ],
+        [
+                "dar vergüenza",
+                "avergonzar"
+        ],
+        [
+                "dar pena",
+                "entristecer"
+        ],
+        [
+                "dar rabia",
+                "enfadar"
+        ],
+        [
+                "dar igual",
+                "no importar"
+        ],
+        [
+                "estar harto",
+                "estar cansado de"
+        ],
+        [
+                "estar hecho polvo",
+                "estar agotado"
+        ],
+        [
+                "estar fatal",
+                "estar muy mal"
+        ],
+        [
+                "estar genial",
+                "estar muy bien"
+        ],
+        [
+                "estar bien",
+                "estar correcto"
+        ],
+        [
+                "estar mal",
+                "estar equivocado"
+        ],
+        [
+                "raro",
+                "extraño"
+        ],
+        [
+                "raro",
+                "poco habitual"
+        ],
+        [
+                "normal",
+                "habitual"
+        ],
+        [
+                "normal",
+                "corriente"
+        ],
+        [
+                "bueno",
+                "útil"
+        ],
+        [
+                "bueno",
+                "agradable"
+        ],
+        [
+                "malo",
+                "perjudicial"
+        ],
+        [
+                "malo",
+                "desagradable"
+        ],
+        [
+                "fuerte",
+                "intenso"
+        ],
+        [
+                "fuerte",
+                "grave"
+        ],
+        [
+                "ligero",
+                "suave"
+        ],
+        [
+                "serio",
+                "grave"
+        ],
+        [
+                "serio",
+                "formal"
+        ],
+        [
+                "simple",
+                "fácil"
+        ],
+        [
+                "difícil",
+                "duro"
+        ],
+        [
+                "duro",
+                "difícil"
+        ],
+        [
+                "duro",
+                "fuerte"
+        ],
+        [
+                "grande",
+                "importante"
+        ],
+        [
+                "pequeño",
+                "menor"
+        ],
+        [
+                "nuevo",
+                "reciente"
+        ],
+        [
+                "viejo",
+                "antiguo"
+        ],
+        [
+                "viejo",
+                "mayor"
+        ],
+        [
+                "bonito",
+                "mono"
+        ],
+        [
+                "bonito",
+                "guapo"
+        ],
+        [
+                "guapo",
+                "atractivo"
+        ],
+        [
+                "elegante",
+                "formal"
+        ],
+        [
+                "cómodo",
+                "práctico"
+        ],
+        [
+                "práctico",
+                "útil"
+        ],
+        [
+                "barato",
+                "asequible"
+        ],
+        [
+                "caro",
+                "costoso"
+        ],
+        [
+                "lleno",
+                "ocupado"
+        ],
+        [
+                "vacío",
+                "libre"
+        ],
+        [
+                "rápido",
+                "ágil"
+        ],
+        [
+                "lento",
+                "pesado"
+        ],
+        [
+                "pesado",
+                "molesto"
+        ],
+        [
+                "pesado",
+                "aburrido"
+        ],
+        [
+                "divertido",
+                "entretenido"
+        ],
+        [
+                "interesante",
+                "entretenido"
+        ],
+        [
+                "aburrido",
+                "soso"
+        ],
+        [
+                "raro",
+                "curioso"
+        ],
+        [
+                "curioso",
+                "interesante"
+        ],
+        [
+                "importante",
+                "serio"
+        ],
+        [
+                "urgente",
+                "importante"
+        ],
+        [
+                "necesario",
+                "útil"
+        ],
+        [
+                "posible",
+                "viable"
+        ],
+        [
+                "imposible",
+                "inviable"
+        ],
+        [
+                "seguro",
+                "fiable"
+        ],
+        [
+                "fiable",
+                "de confianza"
+        ],
+        [
+                "exacto",
+                "preciso"
+        ],
+        [
+                "aproximado",
+                "orientativo"
+        ],
+        [
+                "casi",
+                "prácticamente"
+        ],
+        [
+                "bastante",
+                "muy"
+        ],
+        [
+                "bastante",
+                "suficiente"
+        ],
+        [
+                "demasiado",
+                "muy"
+        ],
+        [
+                "poco",
+                "algo"
+        ],
+        [
+                "un poco",
+                "algo"
+        ],
+        [
+                "algo",
+                "un poco"
+        ],
+        [
+                "entonces",
+                "así que"
+        ],
+        [
+                "entonces",
+                "luego"
+        ],
+        [
+                "luego",
+                "después"
+        ],
+        [
+                "ya",
+                "ahora"
+        ],
+        [
+                "ya",
+                "todavía"
+        ],
+        [
+                "todavía",
+                "aún"
+        ],
+        [
+                "solo",
+                "solamente"
+        ],
+        [
+                "incluso",
+                "hasta"
+        ],
+        [
+                "además",
+                "también"
+        ],
+        [
+                "encima",
+                "además"
+        ],
+        [
+                "aunque",
+                "pero"
+        ],
+        [
+                "pero",
+                "sin embargo"
+        ],
+        [
+                "porque",
+                "como"
+        ],
+        [
+                "por eso",
+                "así que"
+        ],
+        [
+                "quizá",
+                "igual"
+        ],
+        [
+                "igual",
+                "puede que"
+        ],
+        [
+                "seguramente",
+                "probablemente"
+        ],
+        [
+                "probablemente",
+                "posiblemente"
+        ],
+        [
+                "claro",
+                "obviamente"
+        ],
+        [
+                "claro",
+                "sí"
+        ],
+        [
+                "vale",
+                "bueno"
+        ],
+        [
+                "bueno",
+                "pues"
+        ],
+        [
+                "pues",
+                "entonces"
+        ],
+        [
+                "venga",
+                "vale"
+        ],
+        [
+                "venga",
+                "vamos"
+        ],
+        [
+                "anda",
+                "venga"
+        ],
+        [
+                "oye",
+                "mira"
+        ],
+        [
+                "mira",
+                "oye"
+        ],
+        [
+                "perdona",
+                "disculpa"
+        ],
+        [
+                "perdón",
+                "lo siento"
+        ],
+        [
+                "lo siento",
+                "perdona"
+        ],
+        [
+                "gracias",
+                "te lo agradezco"
+        ],
+        [
+                "no pasa nada",
+                "da igual"
+        ],
+        [
+                "no pasa nada",
+                "tranquilo"
+        ],
+        [
+                "tranquilo",
+                "no te preocupes"
+        ],
+        [
+                "qué pena",
+                "qué lástima"
+        ],
+        [
+                "qué bien",
+                "genial"
+        ],
+        [
+                "qué mal",
+                "qué pena"
+        ],
+        [
+                "qué raro",
+                "qué curioso"
+        ],
+        [
+                "qué fuerte",
+                "qué locura"
+        ],
+        [
+                "qué pasada",
+                "increíble"
+        ],
+        [
+                "una pasada",
+                "impresionante"
+        ],
+        [
+                "una maravilla",
+                "una pasada"
+        ],
+        [
+                "una preciosidad",
+                "muy bonito"
+        ],
+        [
+                "me da cosa",
+                "me incomoda"
+        ],
+        [
+                "me da palo",
+                "no me apetece"
+        ],
+        [
+                "me da pereza",
+                "no me apetece"
+        ],
+        [
+                "me da rabia",
+                "me molesta"
+        ],
+        [
+                "me da miedo",
+                "me asusta"
+        ],
+        [
+                "me da vergüenza",
+                "me corta"
+        ],
+        [
+                "me da igual",
+                "me importa poco"
+        ],
+        [
+                "me viene bien",
+                "me conviene"
+        ],
+        [
+                "me viene mal",
+                "no me conviene"
+        ],
+        [
+                "me cuadra",
+                "me encaja"
+        ],
+        [
+                "me encaja",
+                "me parece bien"
+        ],
+        [
+                "me convence",
+                "me parece bien"
+        ],
+        [
+                "no me cuadra",
+                "no me encaja"
+        ],
+        [
+                "no me convence",
+                "no me parece bien"
+        ],
+        [
+                "tener sentido",
+                "cuadrar"
+        ],
+        [
+                "no tener sentido",
+                "no cuadrar"
+        ],
+        [
+                "estar a punto de",
+                "ir a"
+        ],
+        [
+                "acabar de",
+                "hacer hace poco"
+        ],
+        [
+                "seguir haciendo",
+                "continuar haciendo"
+        ],
+        [
+                "volver a hacer",
+                "hacer otra vez"
+        ],
+        [
+                "dejar de hacer",
+                "parar de hacer"
+        ]
+]
+
+    static func promptHints(reference: String, learner: String) -> String {
+        let referenceKey = normalized(reference)
+        let learnerKey = normalized(learner)
+
+        let equivalentHits = relevantGroups(
+            equivalents,
+            reference: referenceKey,
+            learner: learnerKey,
+            limit: 6
+        )
+
+        let contextualHits = relevantGroups(
+            contextual,
+            reference: referenceKey,
+            learner: learnerKey,
+            limit: 4
+        )
+
+        guard !equivalentHits.isEmpty || !contextualHits.isEmpty else {
+            return "(none)"
+        }
+
+        var lines: [String] = []
+
+        if !equivalentHits.isEmpty {
+            lines.append(
+                "Candidate equivalent groups (still preserve tense/person/roles): "
+                + equivalentHits.map { $0.joined(separator: " = ") }.joined(separator: "; ")
+            )
+        }
+
+        if !contextualHits.isEmpty {
+            lines.append(
+                "Context-sensitive near-synonyms (DO NOT auto-accept): "
+                + contextualHits.map { $0.joined(separator: " ~ ") }.joined(separator: "; ")
+            )
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private static func relevantGroups(
+        _ groups: [[String]],
+        reference: String,
+        learner: String,
+        limit: Int
+    ) -> [[String]] {
+        var scored: [(score: Int, group: [String])] = []
+
+        for group in groups {
+            let referenceHits = group.filter {
+                containsPhrase(reference, phrase: normalized($0))
+            }
+            let learnerHits = group.filter {
+                containsPhrase(learner, phrase: normalized($0))
+            }
+
+            guard !referenceHits.isEmpty, !learnerHits.isEmpty else {
+                continue
+            }
+
+            let distinct = Set(referenceHits).union(learnerHits).count
+            guard distinct >= 2 else { continue }
+
+            let longest = group.map { normalized($0).count }.max() ?? 0
+            scored.append((score: distinct * 100 + longest, group: group))
+        }
+
+        return scored
+            .sorted { left, right in
+                if left.score != right.score {
+                    return left.score > right.score
+                }
+                return left.group.joined() < right.group.joined()
+            }
+            .prefix(limit)
+            .map(\.group)
+    }
+
+    private static func containsPhrase(_ text: String, phrase: String) -> Bool {
+        guard !phrase.isEmpty else { return false }
+        return (" " + text + " ").contains(" " + phrase + " ")
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text
+            .lowercased()
+            .folding(
+                options: [.diacriticInsensitive],
+                locale: Locale(identifier: "es_ES")
+            )
+            .replacingOccurrences(of: "’", with: "'")
+            .replacingOccurrences(of: "'", with: " ")
+            .replacingOccurrences(
+                of: "[^a-zñ0-9]+",
+                with: " ",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: "\\s+",
+                with: " ",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 actor LocalLanguageJudge {
     static let shared = LocalLanguageJudge()
 
@@ -715,6 +3188,9 @@ actor LocalLanguageJudge {
         Slightly different but idiomatically equivalent emphasis or intensifiers are fine when the core claim is unchanged.
         In informal spoken French, dropping ne in negatives is normal and must be accepted.
         In informal Madrid Spanish, normal Peninsular colloquial usage is valid.
+        For Spanish, a small local semantic-hint line may be supplied. Treat "=" groups as strong
+        evidence only when the full sentence preserves meaning, tense, person and roles.
+        Treat "~" groups as context-sensitive possibilities, NEVER as automatic equivalence.
         In Lebanese Arabic, natural everyday Lebanese colloquial usage is valid.
         Context may be a broad corpus section label. Use it only when it genuinely disambiguates meaning;
         never treat its wording or theme as an extra requirement.
@@ -735,11 +3211,19 @@ actor LocalLanguageJudge {
         """
 
         let contextLine = context.isEmpty ? "(none needed)" : context
+        let spanishSemanticHints =
+            language.localizedCaseInsensitiveContains("Spanish")
+                ? SpanishSemanticLexicon.promptHints(
+                    reference: reference,
+                    learner: learner
+                )
+                : "(none)"
 
         let user = """
         Language: \(language)
         Register: \(register)
         Context: \(contextLine)
+        Spanish semantic hints: \(spanishSemanticHints)
         English meaning: \(english)
         Reference translation: \(reference)
         Learner answer: \(learner)

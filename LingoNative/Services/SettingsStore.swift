@@ -18,6 +18,7 @@ final class SettingsStore: ObservableObject {
         }
     }
     @Published var autoplayAudio: Bool { didSet { save() } }
+    @Published var dragTokenAudioEnabled: Bool { didSet { save() } }
     @Published var hapticsEnabled: Bool { didSet { save() } }
     @Published var soundEffectsEnabled: Bool { didSet { save() } }
     @Published var showLemmaHints: Bool { didSet { save() } }
@@ -75,6 +76,7 @@ final class SettingsStore: ObservableObject {
         var soundEnabled: Bool?
         var elevenLabsEnabled: Bool?
         var autoplayAudio: Bool
+        var dragTokenAudioEnabled: Bool?
         var hapticsEnabled: Bool
         var soundEffectsEnabled: Bool?
         var showLemmaHints: Bool
@@ -102,6 +104,7 @@ final class SettingsStore: ObservableObject {
             soundEnabled = payload.soundEnabled ?? true
             elevenLabsEnabled = payload.elevenLabsEnabled ?? true
             autoplayAudio = payload.autoplayAudio
+            dragTokenAudioEnabled = payload.dragTokenAudioEnabled ?? true
             hapticsEnabled = payload.hapticsEnabled
             soundEffectsEnabled = payload.soundEffectsEnabled ?? true
             showLemmaHints = payload.showLemmaHints
@@ -121,6 +124,7 @@ final class SettingsStore: ObservableObject {
             soundEnabled = true
             elevenLabsEnabled = true
             autoplayAudio = true
+            dragTokenAudioEnabled = true
             hapticsEnabled = true
             soundEffectsEnabled = true
             showLemmaHints = true
@@ -142,6 +146,7 @@ final class SettingsStore: ObservableObject {
         soundEnabled = true
         elevenLabsEnabled = true
         autoplayAudio = true
+        dragTokenAudioEnabled = true
         hapticsEnabled = true
         soundEffectsEnabled = true
         showLemmaHints = true
@@ -198,6 +203,7 @@ final class SettingsStore: ObservableObject {
             soundEnabled: soundEnabled,
             elevenLabsEnabled: elevenLabsEnabled,
             autoplayAudio: autoplayAudio,
+            dragTokenAudioEnabled: dragTokenAudioEnabled,
             hapticsEnabled: hapticsEnabled,
             soundEffectsEnabled: soundEffectsEnabled,
             showLemmaHints: showLemmaHints,

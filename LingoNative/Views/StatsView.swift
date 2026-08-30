@@ -6,27 +6,21 @@ struct StatsView: View {
     @ObservedObject var settings: SettingsStore
 
     private var courseStats: (seen: Int, correct: Int, wrong: Int, mastered: Int) {
-        var seen = 0
-        var correct = 0
-        var wrong = 0
-        var mastered = 0
+        let prefix = "\(corpus.course.rawValue):"
+        let values = progress.phraseProgress
+            .filter { $0.key.hasPrefix(prefix) }
+            .map(\.value)
 
-        for phrase in corpus.entries {
-            let stats = progress.stats(course: corpus.course, phrase: phrase)
-
-            if stats.seen > 0 {
-                seen += 1
-            }
-
-            correct += stats.correct
-            wrong += stats.wrong
-
-            if stats.mastery >= 0.8 {
-                mastered += 1
-            }
-        }
+        let seen = values.filter { $0.seen > 0 }.count
+        let correct = values.reduce(0) { $0 + $1.correct }
+        let wrong = values.reduce(0) { $0 + $1.wrong }
+        let mastered = values.filter { $0.mastery >= 0.8 }.count
 
         return (seen, correct, wrong, mastered)
+    }
+
+    private var totalPhraseCount: Int {
+        corpus.topics.reduce(0) { $0 + $1.phraseCount }
     }
 
     private var courseAccuracy: Int {
@@ -414,7 +408,7 @@ struct StatsView: View {
             )
 
             Text(
-                "\(courseStats.seen) of \(corpus.entries.count) phrases practised"
+                "\(courseStats.seen) of \(totalPhraseCount) phrases practised"
             )
             .font(.custom("Fredoka-Medium", size: 18))
             .foregroundStyle(Color.lingoInk)
@@ -422,7 +416,7 @@ struct StatsView: View {
             ProgressView(
                 value: Double(courseStats.seen),
                 total: Double(
-                    max(1, corpus.entries.count)
+                    max(1, totalPhraseCount)
                 )
             )
             .tint(

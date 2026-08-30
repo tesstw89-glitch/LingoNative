@@ -65,11 +65,7 @@ struct CourseHomeView: View {
 
                     Group {
                         if selectedTab == 3 {
-                            if let fullCorpus {
-                                StatsView(corpus: fullCorpus, progress: progress, settings: settings)
-                            } else {
-                                loadingView("Loading stats…")
-                            }
+                            StatsView(corpus: corpus, progress: progress, settings: settings)
                         } else {
                             Color.clear
                         }
@@ -88,7 +84,7 @@ struct CourseHomeView: View {
                     .tabItem { Label("Settings", systemImage: "gearshape.fill") }
                 }
                 .onChange(of: selectedTab) { _, tab in
-                    if [1, 2, 3].contains(tab) {
+                    if [1, 2].contains(tab) {
                         TopicCorpusCache.shared.removeAll()
                         loadFullCorpusIfNeeded()
                     } else {
@@ -198,7 +194,7 @@ struct CourseHomeView: View {
         CourseCorpusCache.shared.load(course: course) { result in
             isLoadingFullCorpus = false
 
-            guard [1, 2, 3].contains(selectedTab) else {
+            guard [1, 2].contains(selectedTab) else {
                 CourseCorpusCache.shared.release(course: course)
                 return
             }

@@ -6,6 +6,7 @@ import llama
 struct LingoNativeApp: App {
     @StateObject private var progress: ProgressStore
     @StateObject private var settings: SettingsStore
+    @StateObject private var starStore = StarStore()
 
     init() {
         let inputTextColor = UIColor(red: 0.24, green: 0.27, blue: 0.29, alpha: 1.0)
@@ -69,6 +70,7 @@ struct LingoNativeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(progress: progress, settings: settings)
+                .environmentObject(starStore)
         }
     }
 }

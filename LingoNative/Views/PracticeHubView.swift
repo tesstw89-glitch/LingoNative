@@ -4,6 +4,7 @@ struct PracticeHubView: View {
     let corpus: Corpus
     @ObservedObject var progress: ProgressStore
     @ObservedObject var settings: SettingsStore
+    @EnvironmentObject private var stars: StarStore
 
     var body: some View {
         ScrollView {
@@ -15,6 +16,8 @@ struct PracticeHubView: View {
                         .font(.custom("Fredoka-SemiBold", size: 13))
                         .tracking(1.2)
                         .foregroundStyle(Color.lingoMuted)
+
+                    starredTermsLink
 
                     ForEach(PracticeMode.allCases) { mode in
                         if settings.nonHeadphoneModeEnabled {
@@ -74,6 +77,58 @@ struct PracticeHubView: View {
         .padding(18)
         .background(corpus.course == .french ? Color.lingoBlue : Color.lingoGreen)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var starredTermsLink: some View {
+        let phraseCount = stars.starredPhrases(
+            course: corpus.course,
+            from: corpus.entries
+        ).count
+        let lemmaCount = stars.starredLemmas(
+            course: corpus.course,
+            from: lemmaPool
+        ).count
+
+        return NavigationLink {
+            StarredTermsView(
+                course: corpus.course,
+                phrases: corpus.entries,
+                lemmas: lemmaPool
+            )
+        } label: {
+            HStack(spacing: 16) {
+                Image(systemName: "star.fill")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(Color.lingoGold)
+                    .frame(width: 52, height: 52)
+                    .background(Color.lingoGold.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Starred terms")
+                        .font(.custom("Fredoka-Medium", size: 18))
+                        .foregroundStyle(Color.lingoInk)
+                    Text("Phrases and chunks you've starred")
+                        .font(.custom("Fredoka-Regular", size: 15))
+                        .foregroundStyle(Color.lingoMuted)
+                    Text("\(phraseCount + lemmaCount) starred")
+                        .font(.custom("Fredoka-Medium", size: 13))
+                        .foregroundStyle(Color.lingoGold)
+                }
+
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(Color.lingoMuted)
+            }
+            .padding(15)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.lingoLine, lineWidth: 2)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -508,6 +563,132 @@ struct PracticeHubView: View {
     }
 }
 
+private struct StarredTermsView: View {
+    let course: LanguageCourse
+    let phrases: [PhraseEntry]
+    let lemmas: [Lemma]
+
+    @EnvironmentObject private var stars: StarStore
+
+    private var starredPhrases: [PhraseEntry] {
+        stars.starredPhrases(course: course, from: phrases)
+    }
+
+    private var starredLemmas: [Lemma] {
+        stars.starredLemmas(course: course, from: lemmas)
+    }
+
+    var body: some View {
+        Group {
+            if starredPhrases.isEmpty && starredLemmas.isEmpty {
+                VStack(spacing: 14) {
+                    Image(systemName: "star")
+                        .font(.system(size: 44, weight: .semibold))
+                        .foregroundStyle(Color.lingoGold)
+
+                    Text("No starred terms yet")
+                        .font(.custom("Fredoka-Medium", size: 24))
+                        .foregroundStyle(Color.lingoInk)
+
+                    Text("Star a phrase or chunk while studying and it will appear here.")
+                        .font(.custom("Fredoka-Regular", size: 16))
+                        .foregroundStyle(Color.lingoMuted)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    if !starredPhrases.isEmpty {
+                        Section {
+                            ForEach(starredPhrases) { phrase in
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(phrase.foreign)
+                                            .font(
+                                                course == .arabic
+                                                    ? .custom("NotoSansArabic-Regular", size: 19)
+                                                    : .custom("Fredoka-Medium", size: 17)
+                                            )
+                                            .foregroundStyle(Color.lingoInk)
+
+                                        if course == .arabic,
+                                           let transliteration = phrase.transliteration,
+                                           !transliteration.isEmpty {
+                                            Text(transliteration)
+                                                .font(.custom("Fredoka-Regular", size: 12))
+                                                .foregroundStyle(Color.lingoMuted)
+                                        }
+
+                                        Text(phrase.english)
+                                            .font(.custom("Fredoka-Regular", size: 15))
+                                            .foregroundStyle(Color.lingoMuted)
+
+                                        Text(phrase.topicTitle)
+                                            .font(.custom("Fredoka-Regular", size: 12))
+                                            .foregroundStyle(
+                                                course == .french
+                                                    ? Color.lingoBlue
+                                                    : Color.lingoGreen
+                                            )
+                                    }
+
+                                    Spacer(minLength: 4)
+                                    StarButton(course: course, phrase: phrase)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        } header: {
+                            Text("\(starredPhrases.count) PHRASE\(starredPhrases.count == 1 ? "" : "S")")
+                        }
+                    }
+
+                    if !starredLemmas.isEmpty {
+                        Section {
+                            ForEach(starredLemmas) { lemma in
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(lemma.foreign)
+                                            .font(
+                                                course == .arabic
+                                                    ? .custom("NotoSansArabic-Regular", size: 19)
+                                                    : .custom("Fredoka-Medium", size: 17)
+                                            )
+                                            .foregroundStyle(Color.lingoInk)
+
+                                        if course == .arabic,
+                                           let transliteration = lemma.transliteration,
+                                           !transliteration.isEmpty {
+                                            Text(transliteration)
+                                                .font(.custom("Fredoka-Regular", size: 12))
+                                                .foregroundStyle(Color.lingoMuted)
+                                        }
+
+                                        Text(lemma.english)
+                                            .font(.custom("Fredoka-Regular", size: 15))
+                                            .foregroundStyle(Color.lingoMuted)
+                                    }
+
+                                    Spacer(minLength: 4)
+                                    StarButton(course: course, lemma: lemma)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        } header: {
+                            Text("\(starredLemmas.count) CHUNK\(starredLemmas.count == 1 ? "" : "S")")
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+            }
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Starred terms")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 // MARK: - Lemma-only vocab practice
 
 private enum VocabPracticeMode {
@@ -688,6 +869,9 @@ private struct LanguageTrainerVocabPracticeView: View {
                         .font(.custom("Fredoka-Regular", size: 15))
                         .foregroundStyle(Color.lingoMuted)
                     Spacer()
+
+                    StarButton(course: course, lemma: current)
+
                     Text("VOCAB")
                         .font(.custom("Fredoka-SemiBold", size: 12))
                         .tracking(1)
@@ -1463,10 +1647,15 @@ private struct HeadphoneSpeakingPracticeView: View {
     private func activeView(_ current: PhraseEntry) -> some View {
         ScrollView {
             VStack(spacing: 20) {
-                Text("Question \(index + 1) / \(queue.count)")
-                    .font(.custom("Fredoka-Regular", size: 15))
-                    .foregroundStyle(Color.lingoMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack {
+                    Text("Question \(index + 1) / \(queue.count)")
+                        .font(.custom("Fredoka-Regular", size: 15))
+                        .foregroundStyle(Color.lingoMuted)
+
+                    Spacer()
+
+                    StarButton(course: course, phrase: current)
+                }
 
                 VStack(spacing: 8) {
                     Text(current.english)
@@ -1749,6 +1938,9 @@ private struct LanguageTrainerSpeakingPracticeView: View {
                         .font(.custom("Fredoka-Regular", size: 15))
                         .foregroundStyle(Color.lingoMuted)
                     Spacer()
+
+                    StarButton(course: course, phrase: current)
+
                     if recognizer.isRecording {
                         Label("Listening…", systemImage: "waveform")
                             .font(.custom("Fredoka-Medium", size: 15))
@@ -2190,21 +2382,32 @@ private struct LanguageTrainerLemmaMatchView: View {
         VStack(spacing: 10) {
             ForEach(ids, id: \.self) { id in
                 if let pair = visible.first(where: { $0.id == id }) {
-                    Button {
-                        if isLeft { handleLeftTap(pair) }
-                        else { handleRightTap(pair) }
-                    } label: {
-                        LemmaMatchToken(
-                            text: isLeft ? pair.foreign : pair.english,
-                            isSelected: isLeft ? selectedLeft == id : selectedRight == id,
-                            accent: isLeft ? Color.lingoGreen : Color.lingoBlue
-                        )
+                    HStack(spacing: 6) {
+                        Button {
+                            if isLeft { handleLeftTap(pair) }
+                            else { handleRightTap(pair) }
+                        } label: {
+                            LemmaMatchToken(
+                                text: isLeft ? pair.foreign : pair.english,
+                                isSelected: isLeft ? selectedLeft == id : selectedRight == id,
+                                accent: isLeft ? Color.lingoGreen : Color.lingoBlue
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(dissolvingIDs.contains(id) ? 0 : 1)
+                        .scaleEffect(dissolvingIDs.contains(id) ? 0.92 : 1)
+                        .animation(.easeInOut(duration: 0.22), value: dissolvingIDs)
+                        .disabled(timeUp || !dissolvingIDs.isEmpty)
+
+                        if isLeft {
+                            StarButton(
+                                course: course,
+                                lemmaForeign: pair.foreign,
+                                lemmaEnglish: pair.english
+                            )
+                            .opacity(dissolvingIDs.contains(id) ? 0 : 1)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .opacity(dissolvingIDs.contains(id) ? 0 : 1)
-                    .scaleEffect(dissolvingIDs.contains(id) ? 0.92 : 1)
-                    .animation(.easeInOut(duration: 0.22), value: dissolvingIDs)
-                    .disabled(timeUp || !dissolvingIDs.isEmpty)
                 }
             }
         }
@@ -2350,6 +2553,27 @@ private enum PracticeTextNormalizer {
         "pero", "que", "lo", "se", "me", "te", "nos", "os", "mi", "su", "sus", "por", "para"
     ]
 
+    // MARK: Practice Spanish numeric STT tolerance
+    //
+    // The lesson speaking screen has its own normalizer. Practice > Speaking
+    // uses PracticeTextNormalizer instead, so it needs the same handling for
+    // Apple's habit of turning "mil por cien" into "1000 × 100".
+
+    private static let spanishNumberMap: [String: String] = [
+        "cero": "0",
+        "un": "1", "uno": "1", "una": "1",
+        "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5",
+        "seis": "6", "siete": "7", "ocho": "8", "nueve": "9",
+        "diez": "10", "once": "11", "doce": "12", "trece": "13",
+        "catorce": "14", "quince": "15", "dieciseis": "16",
+        "diecisiete": "17", "dieciocho": "18", "diecinueve": "19",
+        "veinte": "20", "treinta": "30", "cuarenta": "40",
+        "cincuenta": "50", "sesenta": "60", "setenta": "70",
+        "ochenta": "80", "noventa": "90",
+        "cien": "100", "ciento": "100", "sien": "100",
+        "mil": "1000"
+    ]
+
     private static func stripOptionalAgreementNotation(_ text: String) -> String {
         text.replacingOccurrences(
             of: #"(?i)\((e|s|es)\)"#,
@@ -2379,9 +2603,12 @@ private enum PracticeTextNormalizer {
     }
 
     static func transcriptTokenSet(_ transcript: String, course: LanguageCourse) -> Set<String> {
-        Set(
-            transcript
-                .replacingOccurrences(of: "’", with: "'")
+        let prepared = course == .spanish
+            ? normalizeSpanishSpeechTranscript(transcript)
+            : transcript.replacingOccurrences(of: "’", with: "'")
+
+        return Set(
+            prepared
                 .split(whereSeparator: { $0.isWhitespace })
                 .map { canonicalToken(String($0), course: course) }
                 .filter { !$0.isEmpty }
@@ -2418,8 +2645,59 @@ private enum PracticeTextNormalizer {
                 "sont": "son", "sans": "sang", "vingt": "vin"
             ]
             if let mapped = homophones[value] { value = mapped }
+        } else if course == .spanish {
+            if value == "x" {
+                value = "por"
+            }
+            if let number = spanishNumberMap[value] {
+                value = number
+            }
         }
+
         return value
+    }
+
+    private static func normalizeSpanishSpeechTranscript(_ raw: String) -> String {
+        var text = raw
+            .lowercased()
+            .replacingOccurrences(of: "’", with: "'")
+
+        text = text.replacingOccurrences(
+            of: "[×✕✖∙⋅·*]",
+            with: " por ",
+            options: .regularExpression
+        )
+
+        text = text.replacingOccurrences(
+            of: #"(?<=\d)\s*[xX]\s*(?=\d)"#,
+            with: " por ",
+            options: .regularExpression
+        )
+
+        text = text.replacingOccurrences(
+            of: "%",
+            with: " por 100 "
+        )
+
+        text = text.replacingOccurrences(
+            of: #"(?<=\d)[.,](?=\d{3}(?:\D|$))"#,
+            with: "",
+            options: .regularExpression
+        )
+
+        text = text.replacingOccurrences(
+            of: "[.,!?/()«»…:;]",
+            with: " ",
+            options: .regularExpression
+        )
+
+        text = text.replacingOccurrences(
+            of: #"\s+"#,
+            with: " ",
+            options: .regularExpression
+        )
+
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

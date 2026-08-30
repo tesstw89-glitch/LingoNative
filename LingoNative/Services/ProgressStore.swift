@@ -577,12 +577,12 @@ final class ProgressStore: ObservableObject {
     func saveLessonSession(_ session: SavedLessonSession) {
         guard !completedNodeIDs.contains(session.nodeID) else { return }
         savedLessonSessions[session.nodeID] = session
-        persist()
+        persistSavedLessonSessions()
     }
 
     func clearSavedLessonSession(nodeID: String) {
         guard savedLessonSessions.removeValue(forKey: nodeID) != nil else { return }
-        persist()
+        persistSavedLessonSessions()
     }
 
     func lessonProgress(nodeID: String) -> Double {
@@ -1104,6 +1104,12 @@ final class ProgressStore: ObservableObject {
         return formatter
     }()
 
+    private func persistSavedLessonSessions() {
+        if let data = try? JSONEncoder().encode(savedLessonSessions) {
+            defaults.set(data, forKey: savedLessonsKey)
+        }
+    }
+
     private func persist() {
         defaults.set(Array(completedNodeIDs), forKey: completedKey)
         defaults.set(hearts, forKey: heartsKey)
@@ -1130,3 +1136,77 @@ final class ProgressStore: ObservableObject {
         }
     }
 }
+
+// MARK: - Star store
+
+final class StarStore: ObservableObject {
+    @Published private(set) var starredKeys: Set<String>
+
+    private let defaults: UserDefaults
+    private let storageKey = "lingoNative.starredTermKeys.v1"
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        starredKeys = Set(defaults.stringArray(forKey: storageKey) ?? [])
+    }
+
+    func isStarred(_ key: String) -> Bool {
+        starredKeys.contains(key)
+    }
+
+    func toggle(_ key: String) {
+        if starredKeys.contains(key) {
+            starredKeys.remove(key)
+        } else {
+            starredKeys.insert(key)
+        }
+        defaults.set(Array(starredKeys).sorted(), forKey: storageKey)
+    }
+
+    static func phraseKey(course: LanguageCourse, phrase: PhraseEntry) -> String {
+        "phrase:\(course.rawValue):\(phrase.id)"
+    }
+
+    static func lemmaKey(course: LanguageCourse, lemma: Lemma) -> String {
+        lemmaKey(course: course, foreign: lemma.foreign, english: lemma.english)
+    }
+
+    static func lemmaKey(
+        course: LanguageCourse,
+        foreign: String,
+        english: String
+    ) -> String {
+        "lemma:\(course.rawValue):\(component(foreign))||\(component(english))"
+    }
+
+    func isStarred(course: LanguageCourse, phrase: PhraseEntry) -> Bool {
+        isStarred(Self.phraseKey(course: course, phrase: phrase))
+    }
+
+    func isStarred(course: LanguageCourse, lemma: Lemma) -> Bool {
+        isStarred(Self.lemmaKey(course: course, lemma: lemma))
+    }
+
+    func starredPhrases(
+        course: LanguageCourse,
+        from phrases: [PhraseEntry]
+    ) -> [PhraseEntry] {
+        phrases.filter { isStarred(course: course, phrase: $0) }
+    }
+
+    func starredLemmas(
+        course: LanguageCourse,
+        from lemmas: [Lemma]
+    ) -> [Lemma] {
+        lemmas.filter { isStarred(course: course, lemma: $0) }
+    }
+
+    private static func component(_ text: String) -> String {
+        text
+            .lowercased()
+            .replacingOccurrences(of: "’", with: "'")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
