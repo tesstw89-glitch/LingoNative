@@ -10,32 +10,72 @@ struct CourseHomeView: View {
 
     @State private var corpus: Corpus?
     @State private var loadError: String?
+    @State private var selectedTab = 0
+    @State private var loadedTabs: Set<Int> = [0]
 
     var body: some View {
         Group {
             if let corpus {
-                TabView {
-                    LearnPathView(corpus: corpus, progress: progress, settings: settings)
-                        .tabItem { Label("Learn", systemImage: "house.fill") }
-
-                    PracticeHubView(corpus: corpus, progress: progress, settings: settings)
-                        .safeAreaInset(edge: .bottom, spacing: 0) {
-                            if RandomConversationPromptStore.supports(course: corpus.course) {
-                                RandomChatGPTPracticeButton(corpus: corpus)
-                                    .padding(.horizontal, 14)
-                                    .padding(.bottom, 4)
-                            }
+                TabView(selection: $selectedTab) {
+                    Group {
+                        if loadedTabs.contains(0) {
+                            LearnPathView(corpus: corpus, progress: progress, settings: settings)
+                        } else {
+                            Color.clear
                         }
-                        .tabItem { Label("Practice", systemImage: "dumbbell.fill") }
+                    }
+                    .tag(0)
+                    .tabItem { Label("Learn", systemImage: "house.fill") }
 
-                    BrowseView(corpus: corpus, progress: progress, settings: settings)
-                        .tabItem { Label("Browse", systemImage: "books.vertical.fill") }
+                    Group {
+                        if loadedTabs.contains(1) {
+                            PracticeHubView(corpus: corpus, progress: progress, settings: settings)
+                                .safeAreaInset(edge: .bottom, spacing: 0) {
+                                    if RandomConversationPromptStore.supports(course: corpus.course) {
+                                        RandomChatGPTPracticeButton(corpus: corpus)
+                                            .padding(.horizontal, 14)
+                                            .padding(.bottom, 4)
+                                    }
+                                }
+                        } else {
+                            Color.clear
+                        }
+                    }
+                    .tag(1)
+                    .tabItem { Label("Practice", systemImage: "dumbbell.fill") }
 
-                    StatsView(corpus: corpus, progress: progress, settings: settings)
-                        .tabItem { Label("Stats", systemImage: "chart.bar.fill") }
+                    Group {
+                        if loadedTabs.contains(2) {
+                            BrowseView(corpus: corpus, progress: progress, settings: settings)
+                        } else {
+                            Color.clear
+                        }
+                    }
+                    .tag(2)
+                    .tabItem { Label("Browse", systemImage: "books.vertical.fill") }
 
-                    SettingsView(course: course, progress: progress, settings: settings)
-                        .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                    Group {
+                        if loadedTabs.contains(3) {
+                            StatsView(corpus: corpus, progress: progress, settings: settings)
+                        } else {
+                            Color.clear
+                        }
+                    }
+                    .tag(3)
+                    .tabItem { Label("Stats", systemImage: "chart.bar.fill") }
+
+                    Group {
+                        if loadedTabs.contains(4) {
+                            SettingsView(course: course, progress: progress, settings: settings)
+                        } else {
+                            Color.clear
+                        }
+                    }
+                    .tag(4)
+                    .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                }
+                .onChange(of: selectedTab) { _, newValue in
+                    loadedTabs.insert(newValue)
                 }
                 .tint(course == .french ? Color.lingoBlue : Color.lingoGreen)
                 .environment(\.openURL, OpenURLAction { url in
@@ -54,7 +94,7 @@ struct CourseHomeView: View {
                 )
 
             } else {
-                ProgressView("Building your course…")
+                ProgressView("Opening your course…")
             }
         }
         .navigationTitle("")
@@ -85,12 +125,15 @@ struct CourseHomeView: View {
                 return
             }
 
-            do {
-                let loaded = try CorpusLoader.load(course: course)
-                CourseCorpusCache.shared.store(loaded, for: course)
-                corpus = loaded
-            } catch {
-                loadError = error.localizedDescription
+            let requestedCourse = course
+
+            CourseCorpusCache.shared.load(course: requestedCourse) { result in
+                switch result {
+                case .success(let loaded):
+                    corpus = loaded
+                case .failure(let error):
+                    loadError = error.localizedDescription
+                }
             }
         }
     }
@@ -102,6 +145,7 @@ final class CourseCorpusCache {
     static let shared = CourseCorpusCache()
 
     private var corpora: [LanguageCourse: Corpus] = [:]
+    private var waiting: [LanguageCourse: [(Result<Corpus, Error>) -> Void]] = [:]
 
     func corpus(for course: LanguageCourse) -> Corpus? {
         corpora[course]
@@ -111,8 +155,221 @@ final class CourseCorpusCache {
         corpora[course] = corpus
     }
 
+    func load(
+        course: LanguageCourse,
+        completion: @escaping (Result<Corpus, Error>) -> Void
+    ) {
+        if let cached = corpora[course] {
+            completion(.success(cached))
+            return
+        }
+
+        if waiting[course] != nil {
+            waiting[course, default: []].append(completion)
+            return
+        }
+
+        waiting[course] = [completion]
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result {
+                try CourseCorpusDiskCache.loadOrBuild(course: course)
+            }
+
+            DispatchQueue.main.async {
+                if case .success(let loaded) = result {
+                    self.corpora[course] = loaded
+                }
+
+                let completions = self.waiting.removeValue(forKey: course) ?? []
+                completions.forEach { $0(result) }
+            }
+        }
+    }
+
+    func prewarmFromDisk() {
+        for course in LanguageCourse.allCases where corpora[course] == nil {
+            DispatchQueue.global(qos: .utility).async {
+                guard let cached = try? CourseCorpusDiskCache.loadCached(course: course) else {
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    if self.corpora[course] == nil {
+                        self.corpora[course] = cached
+                    }
+                }
+            }
+        }
+    }
+
     func removeAll() {
         corpora.removeAll(keepingCapacity: false)
+        waiting.removeAll(keepingCapacity: false)
+    }
+}
+
+private enum CourseCorpusDiskCache {
+    private struct CachedUnit: Codable {
+        let id: String
+        let title: String
+        let topicID: String
+        let topicTitle: String
+        let topicIcon: String
+        let phraseIDs: [String]
+    }
+
+    private struct CachedTopic: Codable {
+        let id: String
+        let title: String
+        let icon: String
+        let phraseCount: Int
+        let unitCount: Int
+    }
+
+    private struct CachedCorpus: Codable {
+        let course: LanguageCourse
+        let entries: [PhraseEntry]
+        let units: [CachedUnit]
+        let topics: [CachedTopic]
+        let blockSize: Int
+
+        init(_ corpus: Corpus) {
+            course = corpus.course
+            entries = corpus.entries
+            units = corpus.units.map {
+                CachedUnit(
+                    id: $0.id,
+                    title: $0.title,
+                    topicID: $0.topicID,
+                    topicTitle: $0.topicTitle,
+                    topicIcon: $0.topicIcon,
+                    phraseIDs: $0.phrases.map(\.id)
+                )
+            }
+            topics = corpus.topics.map {
+                CachedTopic(
+                    id: $0.id,
+                    title: $0.title,
+                    icon: $0.icon,
+                    phraseCount: $0.phraseCount,
+                    unitCount: $0.unitCount
+                )
+            }
+            blockSize = corpus.blockSize
+        }
+
+        func makeCorpus() -> Corpus {
+            let entriesByID = Dictionary(
+                uniqueKeysWithValues: entries.map { ($0.id, $0) }
+            )
+
+            let rebuiltUnits = units.map { unit in
+                LearningUnit(
+                    id: unit.id,
+                    title: unit.title,
+                    topicID: unit.topicID,
+                    topicTitle: unit.topicTitle,
+                    topicIcon: unit.topicIcon,
+                    phrases: unit.phraseIDs.compactMap { entriesByID[$0] }
+                )
+            }
+
+            let rebuiltTopics = topics.map {
+                LearningTopic(
+                    id: $0.id,
+                    title: $0.title,
+                    icon: $0.icon,
+                    phraseCount: $0.phraseCount,
+                    unitCount: $0.unitCount
+                )
+            }
+
+            return Corpus(
+                course: course,
+                entries: entries,
+                units: rebuiltUnits,
+                topics: rebuiltTopics,
+                blockSize: blockSize
+            )
+        }
+    }
+
+    static var directory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("BuiltCourses", isDirectory: true)
+    }
+
+    static func loadCached(course: LanguageCourse) throws -> Corpus? {
+        let url = cacheURL(for: course)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+        let cached = try PropertyListDecoder().decode(CachedCorpus.self, from: data)
+        return cached.makeCorpus()
+    }
+
+    static func loadOrBuild(course: LanguageCourse) throws -> Corpus {
+        if let cached = try loadCached(course: course) {
+            return cached
+        }
+
+        let built = try CorpusLoader.load(course: course)
+        try? save(built, course: course)
+        return built
+    }
+
+    private static func save(_ corpus: Corpus, course: LanguageCourse) throws {
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        let data = try encoder.encode(CachedCorpus(corpus))
+        try data.write(to: cacheURL(for: course), options: .atomic)
+
+        removeStaleFiles(for: course)
+    }
+
+    private static func cacheURL(for course: LanguageCourse) -> URL {
+        directory.appendingPathComponent(
+            "\(course.rawValue)-\(bundleFingerprint()).plist"
+        )
+    }
+
+    private static func bundleFingerprint() -> String {
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String ?? "0"
+
+        let attributes = try? FileManager.default.attributesOfItem(
+            atPath: Bundle.main.bundlePath
+        )
+        let modified = attributes?[.modificationDate] as? Date
+        let timestamp = Int(modified?.timeIntervalSince1970 ?? 0)
+
+        return "\(version)-\(timestamp)"
+    }
+
+    private static func removeStaleFiles(for course: LanguageCourse) {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ) else {
+            return
+        }
+
+        let current = cacheURL(for: course)
+
+        for file in files
+        where file.lastPathComponent.hasPrefix("\(course.rawValue)-")
+            && file != current {
+            try? FileManager.default.removeItem(at: file)
+        }
     }
 }
 

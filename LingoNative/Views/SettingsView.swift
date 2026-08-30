@@ -406,7 +406,7 @@ struct SettingsView: View {
                         .foregroundStyle(Color.lingoMuted)
                 }
 
-                Text("Removes generated ElevenLabs audio, temporary web cache and the in-memory course cache. Lesson progress, XP, streaks, phrase mastery, bookmarks, settings and the AI model are kept.")
+                Text("Removes generated ElevenLabs audio, temporary web cache and built-course cache files. Lesson progress, XP, streaks, phrase mastery, bookmarks, settings and the AI model are kept.")
                     .font(.custom("Fredoka-Regular", size: 13))
                     .foregroundStyle(Color.lingoMuted)
 
@@ -597,8 +597,14 @@ private enum AppCacheManager {
             .appendingPathComponent("ElevenLabsTTS", isDirectory: true)
     }
 
+    private static var builtCoursesDirectory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("BuiltCourses", isDirectory: true)
+    }
+
     static func sizeBytes() -> Int64 {
         directorySize(at: elevenLabsDirectory)
+            + directorySize(at: builtCoursesDirectory)
             + Int64(URLCache.shared.currentDiskUsage)
     }
 
@@ -619,6 +625,10 @@ private enum AppCacheManager {
 
         if FileManager.default.fileExists(atPath: elevenLabsDirectory.path) {
             try? FileManager.default.removeItem(at: elevenLabsDirectory)
+        }
+
+        if FileManager.default.fileExists(atPath: builtCoursesDirectory.path) {
+            try? FileManager.default.removeItem(at: builtCoursesDirectory)
         }
 
         URLCache.shared.removeAllCachedResponses()

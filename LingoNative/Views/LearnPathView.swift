@@ -27,6 +27,7 @@ struct LearnPathView: View {
                             progress: progress,
                             settings: settings
                         )
+                        .id(unit.id)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -203,7 +204,16 @@ struct LearnPathView: View {
 
     private func scrollToActive(using proxy: ScrollViewProxy, animated: Bool) {
         guard let activeNodeID else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+
+        guard let activeUnitID = corpus.units.first(where: { unit in
+            unit.nodes().contains { $0.id == activeNodeID }
+        })?.id else {
+            return
+        }
+
+        proxy.scrollTo(activeUnitID, anchor: .center)
+
+        DispatchQueue.main.async {
             if animated {
                 withAnimation(.easeInOut(duration: 0.45)) {
                     proxy.scrollTo(activeNodeID, anchor: .center)
@@ -220,12 +230,9 @@ struct LearnPathView: View {
     }
 
     private func sectionNumber(at index: Int) -> Int {
-        guard index > 0 else { return 1 }
-        var section = 1
-        for offset in 1...index where corpus.units[offset - 1].topicID != corpus.units[offset].topicID {
-            section += 1
-        }
-        return section
+        guard corpus.units.indices.contains(index) else { return 1 }
+        let topicID = corpus.units[index].topicID
+        return (corpus.topics.firstIndex { $0.id == topicID } ?? 0) + 1
     }
 
     private func topicAccent(_ topicID: String) -> Color {
