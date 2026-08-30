@@ -64,9 +64,6 @@ struct CoursePickerView: View {
         }
         .background(Color(.systemGroupedBackground))
         .navigationBarHidden(true)
-        .task {
-            CourseCorpusCache.shared.prewarmFromDisk()
-        }
     }
 }
 

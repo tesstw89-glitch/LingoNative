@@ -46,14 +46,11 @@ struct UnitSectionView: View {
                     Group {
                         if unlocked || completed {
                             NavigationLink {
-                                QuizView(
-                                    session: .similarityAwareLesson(
-                                        course: course,
-                                        unit: unit,
-                                        node: node,
-                                        allPhrases: allPhrases,
-                                        exerciseTypes: settings.effectiveExerciseTypes
-                                    ),
+                                TopicLessonLoaderView(
+                                    course: course,
+                                    topicID: unit.topicID,
+                                    unitID: unit.id,
+                                    nodeID: node.id,
                                     progress: progress,
                                     settings: settings
                                 )
@@ -164,7 +161,7 @@ struct UnitSectionView: View {
                     .font(.custom("Fredoka-Medium", size: 18))
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("\(unit.phrases.count) phrases · \(normalLessonCount) lesson\(normalLessonCount == 1 ? "" : "s") + review")
+                Text("\(unit.phraseCount) phrases · \(normalLessonCount) lesson\(normalLessonCount == 1 ? "" : "s") + review")
                     .font(.custom("Fredoka-Light", size: 14))
                     .foregroundStyle(.white.opacity(0.85))
             }
@@ -173,14 +170,11 @@ struct UnitSectionView: View {
 
             if let activeNodeInUnit {
                 NavigationLink {
-                    QuizView(
-                        session: .similarityAwareLesson(
-                            course: course,
-                            unit: unit,
-                            node: activeNodeInUnit,
-                            allPhrases: allPhrases,
-                            exerciseTypes: settings.effectiveExerciseTypes
-                        ),
+                    TopicLessonLoaderView(
+                        course: course,
+                        topicID: unit.topicID,
+                        unitID: unit.id,
+                        nodeID: activeNodeInUnit.id,
                         progress: progress,
                         settings: settings
                     )
@@ -320,6 +314,105 @@ struct UnitSectionView: View {
         let previousUnit = allUnits[unitIndex - 1]
         guard let lastNode = previousUnit.nodes().last else { return true }
         return progress.isCompleted(lastNode.id)
+    }
+}
+
+private struct TopicLessonLoaderView: View {
+    let course: LanguageCourse
+    let topicID: String
+    let unitID: String
+    let nodeID: String
+    @ObservedObject var progress: ProgressStore
+    @ObservedObject var settings: SettingsStore
+    @State private var topicCorpus: Corpus?
+    @State private var loadError: String?
+
+    var body: some View {
+        Group {
+            if let topicCorpus,
+               let unit = topicCorpus.units.first(where: { $0.id == unitID }),
+               let node = unit.nodes().first(where: { $0.id == nodeID }) {
+                QuizView(
+                    session: .similarityAwareLesson(
+                        course: course,
+                        unit: unit,
+                        node: node,
+                        allPhrases: topicCorpus.entries,
+                        exerciseTypes: settings.effectiveExerciseTypes
+                    ),
+                    progress: progress,
+                    settings: settings
+                )
+            } else if let loadError {
+                ContentUnavailableView(
+                    "Couldn’t open this topic",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(loadError)
+                )
+            } else {
+                ProgressView("Opening topic…")
+            }
+        }
+        .task {
+            guard topicCorpus == nil else { return }
+            TopicCorpusCache.shared.load(course: course, topicID: topicID) { result in
+                switch result {
+                case .success(let loaded): topicCorpus = loaded
+                case .failure(let error): loadError = error.localizedDescription
+                }
+            }
+        }
+    }
+}
+
+@MainActor
+final class TopicCorpusCache {
+    static let shared = TopicCorpusCache()
+    private var currentCourse: LanguageCourse?
+    private var currentTopicID: String?
+    private var currentCorpus: Corpus?
+    private var requestID: UUID?
+
+    func load(
+        course: LanguageCourse,
+        topicID: String,
+        completion: @escaping (Result<Corpus, Error>) -> Void
+    ) {
+        if currentCourse == course,
+           currentTopicID == topicID,
+           let currentCorpus {
+            completion(.success(currentCorpus))
+            return
+        }
+
+        currentCourse = nil
+        currentTopicID = nil
+        currentCorpus = nil
+
+        let id = UUID()
+        requestID = id
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result {
+                try CorpusLoader.loadTopic(course: course, topicID: topicID)
+            }
+            DispatchQueue.main.async {
+                if self.requestID == id,
+                   case .success(let loaded) = result {
+                    self.currentCourse = course
+                    self.currentTopicID = topicID
+                    self.currentCorpus = loaded
+                }
+                completion(result)
+            }
+        }
+    }
+
+    func removeAll() {
+        requestID = nil
+        currentCourse = nil
+        currentTopicID = nil
+        currentCorpus = nil
     }
 }
 

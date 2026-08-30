@@ -9,16 +9,17 @@ struct CourseHomeView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var corpus: Corpus?
+    @State private var fullCorpus: Corpus?
     @State private var loadError: String?
     @State private var selectedTab = 0
-    @State private var loadedTabs: Set<Int> = [0]
+    @State private var isLoadingFullCorpus = false
 
     var body: some View {
         Group {
             if let corpus {
                 TabView(selection: $selectedTab) {
                     Group {
-                        if loadedTabs.contains(0) {
+                        if selectedTab == 0 {
                             LearnPathView(corpus: corpus, progress: progress, settings: settings)
                         } else {
                             Color.clear
@@ -28,15 +29,19 @@ struct CourseHomeView: View {
                     .tabItem { Label("Learn", systemImage: "house.fill") }
 
                     Group {
-                        if loadedTabs.contains(1) {
-                            PracticeHubView(corpus: corpus, progress: progress, settings: settings)
-                                .safeAreaInset(edge: .bottom, spacing: 0) {
-                                    if RandomConversationPromptStore.supports(course: corpus.course) {
-                                        RandomChatGPTPracticeButton(corpus: corpus)
-                                            .padding(.horizontal, 14)
-                                            .padding(.bottom, 4)
+                        if selectedTab == 1 {
+                            if let fullCorpus {
+                                PracticeHubView(corpus: fullCorpus, progress: progress, settings: settings)
+                                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                                        if RandomConversationPromptStore.supports(course: fullCorpus.course) {
+                                            RandomChatGPTPracticeButton(corpus: fullCorpus)
+                                                .padding(.horizontal, 14)
+                                                .padding(.bottom, 4)
+                                        }
                                     }
-                                }
+                            } else {
+                                loadingView("Loading practice…")
+                            }
                         } else {
                             Color.clear
                         }
@@ -45,8 +50,12 @@ struct CourseHomeView: View {
                     .tabItem { Label("Practice", systemImage: "dumbbell.fill") }
 
                     Group {
-                        if loadedTabs.contains(2) {
-                            BrowseView(corpus: corpus, progress: progress, settings: settings)
+                        if selectedTab == 2 {
+                            if let fullCorpus {
+                                BrowseView(corpus: fullCorpus, progress: progress, settings: settings)
+                            } else {
+                                loadingView("Loading browse…")
+                            }
                         } else {
                             Color.clear
                         }
@@ -55,8 +64,12 @@ struct CourseHomeView: View {
                     .tabItem { Label("Browse", systemImage: "books.vertical.fill") }
 
                     Group {
-                        if loadedTabs.contains(3) {
-                            StatsView(corpus: corpus, progress: progress, settings: settings)
+                        if selectedTab == 3 {
+                            if let fullCorpus {
+                                StatsView(corpus: fullCorpus, progress: progress, settings: settings)
+                            } else {
+                                loadingView("Loading stats…")
+                            }
                         } else {
                             Color.clear
                         }
@@ -65,7 +78,7 @@ struct CourseHomeView: View {
                     .tabItem { Label("Stats", systemImage: "chart.bar.fill") }
 
                     Group {
-                        if loadedTabs.contains(4) {
+                        if selectedTab == 4 {
                             SettingsView(course: course, progress: progress, settings: settings)
                         } else {
                             Color.clear
@@ -74,8 +87,13 @@ struct CourseHomeView: View {
                     .tag(4)
                     .tabItem { Label("Settings", systemImage: "gearshape.fill") }
                 }
-                .onChange(of: selectedTab) { _, newValue in
-                    loadedTabs.insert(newValue)
+                .onChange(of: selectedTab) { _, tab in
+                    if [1, 2, 3].contains(tab) {
+                        TopicCorpusCache.shared.removeAll()
+                        loadFullCorpusIfNeeded()
+                    } else {
+                        releaseFullCorpus()
+                    }
                 }
                 .tint(course == .french ? Color.lingoBlue : Color.lingoGreen)
                 .environment(\.openURL, OpenURLAction { url in
@@ -85,14 +103,12 @@ struct CourseHomeView: View {
                     }
                     return .systemAction
                 })
-
             } else if let loadError {
                 ContentUnavailableView(
                     "Couldn’t load the course",
                     systemImage: "exclamationmark.triangle",
                     description: Text(loadError)
                 )
-
             } else {
                 ProgressView("Opening your course…")
             }
@@ -100,42 +116,91 @@ struct CourseHomeView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
+                    TopicCorpusCache.shared.removeAll()
+                    releaseFullCorpus()
                     dismiss()
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 18, weight: .medium))
-
                         Text("Back")
                             .font(.custom("Fredoka-Regular", size: 18))
                     }
                 }
             }
         }
-
         .task {
             guard corpus == nil else { return }
 
-            if let cached = CourseCorpusCache.shared.corpus(for: course) {
-                corpus = cached
-                return
-            }
-
-            let requestedCourse = course
-
-            CourseCorpusCache.shared.load(course: requestedCourse) { result in
+            CourseCorpusCache.shared.load(course: course) { result in
                 switch result {
                 case .success(let loaded):
-                    corpus = loaded
+                    corpus = Corpus(
+                        course: loaded.course,
+                        entries: [],
+                        units: loaded.units.map {
+                            LearningUnit(
+                                id: $0.id,
+                                title: $0.title,
+                                topicID: $0.topicID,
+                                topicTitle: $0.topicTitle,
+                                topicIcon: $0.topicIcon,
+                                phrases: [],
+                                phraseCount: $0.phraseCount
+                            )
+                        },
+                        topics: loaded.topics,
+                        blockSize: loaded.blockSize
+                    )
+                    CourseCorpusCache.shared.release(course: course)
+
                 case .failure(let error):
                     loadError = error.localizedDescription
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func loadingView(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text(message)
+                .font(.custom("Fredoka-Regular", size: 15))
+                .foregroundStyle(Color.lingoMuted)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    private func loadFullCorpusIfNeeded() {
+        guard fullCorpus == nil, !isLoadingFullCorpus else { return }
+        isLoadingFullCorpus = true
+
+        CourseCorpusCache.shared.load(course: course) { result in
+            isLoadingFullCorpus = false
+
+            guard [1, 2, 3].contains(selectedTab) else {
+                CourseCorpusCache.shared.release(course: course)
+                return
+            }
+
+            switch result {
+            case .success(let loaded):
+                fullCorpus = loaded
+            case .failure(let error):
+                loadError = error.localizedDescription
+            }
+        }
+    }
+
+    private func releaseFullCorpus() {
+        fullCorpus = nil
+        isLoadingFullCorpus = false
+        CourseCorpusCache.shared.release(course: course)
     }
 }
 
@@ -187,20 +252,8 @@ final class CourseCorpusCache {
         }
     }
 
-    func prewarmFromDisk() {
-        for course in LanguageCourse.allCases where corpora[course] == nil {
-            DispatchQueue.global(qos: .utility).async {
-                guard let cached = try? CourseCorpusDiskCache.loadCached(course: course) else {
-                    return
-                }
-
-                DispatchQueue.main.async {
-                    if self.corpora[course] == nil {
-                        self.corpora[course] = cached
-                    }
-                }
-            }
-        }
+    func release(course: LanguageCourse) {
+        corpora.removeValue(forKey: course)
     }
 
     func removeAll() {

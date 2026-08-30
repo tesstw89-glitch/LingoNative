@@ -137,25 +137,48 @@ struct LearningUnit: Identifiable, Hashable {
     let topicTitle: String
     let topicIcon: String
     let phrases: [PhraseEntry]
+    private let phraseCountOverride: Int?
+
+    init(
+        id: String,
+        title: String,
+        topicID: String,
+        topicTitle: String,
+        topicIcon: String,
+        phrases: [PhraseEntry],
+        phraseCount: Int? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.topicID = topicID
+        self.topicTitle = topicTitle
+        self.topicIcon = topicIcon
+        self.phrases = phrases
+        self.phraseCountOverride = phraseCount
+    }
+
+    var phraseCount: Int {
+        phraseCountOverride ?? phrases.count
+    }
 
     func nodes(sessionSize: Int = 10) -> [LessonNode] {
         let safeSessionSize = max(1, sessionSize)
-        let lessonCount = max(1, Int(ceil(Double(phrases.count) / Double(safeSessionSize))))
+        let count = phraseCount
+        let lessonCount = max(1, Int(ceil(Double(count) / Double(safeSessionSize))))
         let regularNodes = (0..<lessonCount).map { index in
             LessonNode(
                 id: "\(id)-lesson-\(index + 1)",
                 unitID: id,
                 index: index,
-                sessionSize: min(safeSessionSize, max(1, phrases.count))
+                sessionSize: min(safeSessionSize, max(1, count))
             )
         }
 
-        // Every unit finishes with a mandatory consolidation lesson.
         let reviewNode = LessonNode(
             id: "\(id)-review",
             unitID: id,
             index: lessonCount,
-            sessionSize: max(1, phrases.count)
+            sessionSize: max(1, count)
         )
         return regularNodes + [reviewNode]
     }

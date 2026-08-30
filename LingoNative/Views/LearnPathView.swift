@@ -97,7 +97,7 @@ struct LearnPathView: View {
                 .scaledToFit()
                 .frame(width: 64, height: 64)
                .foregroundStyle(Color.lingoInk)
-            Text("\(corpus.topics.count) topics · \(corpus.entries.count) phrases · \(corpus.units.count) units")
+            Text("\(corpus.topics.count) topics · \(corpus.topics.reduce(0) { $0 + $1.phraseCount }) phrases · \(corpus.units.count) units")
                 .font(.custom("Fredoka-Medium", size: 16))
                 .foregroundStyle(Color.lingoMuted)
 

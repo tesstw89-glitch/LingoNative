@@ -73,6 +73,97 @@ private enum FlexibleID: Decodable {
 }
 
 enum CorpusLoader {
+    static func loadTopic(
+        course: LanguageCourse,
+        topicID: String
+    ) throws -> Corpus {
+        let manifest = loadManifest() ?? fallbackManifest
+
+        guard let definition = manifest.topics.first(where: { $0.id == topicID }),
+              let resource = definition.resources[course.rawValue] else {
+            throw CorpusLoaderError.noTopics(course)
+        }
+
+        let rawEntries = try loadRawEntries(resource.file)
+        let entries = rawEntries.enumerated().map { index, raw in
+            let sourceID = raw.id?.stringValue ?? String(index + 1)
+            let stableID = definition.id == "opinions"
+                ? sourceID
+                : "\(definition.id):\(sourceID)"
+
+            return PhraseEntry(
+                id: stableID,
+                topicID: definition.id,
+                topicTitle: definition.title,
+                foreign: raw.foreign,
+                transliteration: raw.transliteration,
+                tokens: raw.tokens,
+                english: raw.english,
+                lemmas: raw.lemmas ?? [],
+                context: raw.context
+            )
+        }
+
+        var order: [String] = []
+        var buckets: [String: [PhraseEntry]] = [:]
+        var unitTitles: [String: String] = [:]
+        var explicitUnitIDs: [String: String] = [:]
+
+        for (index, entry) in entries.enumerated() {
+            let raw = rawEntries[index]
+            let unitTitle = raw.unit?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+                ?? makeUnitTitle(context: entry.context, strategy: resource.unitStrategy)
+            let explicitUnitID = raw.unitID?.stringValue
+            let bucketKey = explicitUnitID.map { "id:\($0)" } ?? "title:\(unitTitle)"
+
+            if buckets[bucketKey] == nil {
+                order.append(bucketKey)
+                buckets[bucketKey] = []
+                unitTitles[bucketKey] = unitTitle
+                if let explicitUnitID {
+                    explicitUnitIDs[bucketKey] = explicitUnitID
+                }
+            }
+            buckets[bucketKey, default: []].append(entry)
+        }
+
+        let units = order.enumerated().map { index, key in
+            let sourceUnitID = explicitUnitIDs[key] ?? String(index + 1)
+            let unitID = definition.id == "opinions"
+                ? "\(course.rawValue)-unit-\(sourceUnitID)"
+                : "\(course.rawValue)-\(definition.id)-unit-\(sourceUnitID)"
+
+            return LearningUnit(
+                id: unitID,
+                title: unitTitles[key] ?? "Everyday language",
+                topicID: definition.id,
+                topicTitle: definition.title,
+                topicIcon: definition.icon,
+                phrases: buckets[key] ?? []
+            )
+        }
+
+        guard !units.isEmpty else {
+            throw CorpusLoaderError.noTopics(course)
+        }
+
+        return Corpus(
+            course: course,
+            entries: entries,
+            units: units,
+            topics: [
+                LearningTopic(
+                    id: definition.id,
+                    title: definition.title,
+                    icon: definition.icon,
+                    phraseCount: entries.count,
+                    unitCount: units.count
+                )
+            ],
+            blockSize: max(1, manifest.blockSize)
+        )
+    }
+
     static func load(course: LanguageCourse) throws -> Corpus {
         let manifest = loadManifest() ?? fallbackManifest
         var topicUnitGroups: [[LearningUnit]] = []
