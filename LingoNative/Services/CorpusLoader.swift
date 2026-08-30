@@ -77,6 +77,31 @@ enum CorpusLoader {
         course: LanguageCourse,
         topicID: String
     ) throws -> Corpus {
+        if CorpusDatabase.shared.isAvailable {
+            return try CorpusDatabase.shared.loadTopic(
+                course: course,
+                topicID: topicID
+            )
+        }
+        return try loadJSONTopic(
+            course: course,
+            topicID: topicID
+        )
+    }
+
+    static func load(course: LanguageCourse) throws -> Corpus {
+        if CorpusDatabase.shared.isAvailable {
+            return try CorpusDatabase.shared.loadWholeCourse(
+                course: course
+            )
+        }
+        return try loadJSONCourse(course: course)
+    }
+
+    private static func loadJSONTopic(
+        course: LanguageCourse,
+        topicID: String
+    ) throws -> Corpus {
         let manifest = loadManifest() ?? fallbackManifest
 
         guard let definition = manifest.topics.first(where: { $0.id == topicID }),
@@ -164,7 +189,7 @@ enum CorpusLoader {
         )
     }
 
-    static func load(course: LanguageCourse) throws -> Corpus {
+    private static func loadJSONCourse(course: LanguageCourse) throws -> Corpus {
         let manifest = loadManifest() ?? fallbackManifest
         var topicUnitGroups: [[LearningUnit]] = []
         var topics: [LearningTopic] = []

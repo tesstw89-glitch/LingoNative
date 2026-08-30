@@ -135,10 +135,20 @@ struct CourseHomeView: View {
         .task {
             guard corpus == nil else { return }
 
-            CourseCorpusCache.shared.load(course: course) { result in
-                switch result {
-                case .success(let loaded):
-                    corpus = Corpus(
+            let requestedCourse = course
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = Result {
+                    if CorpusDatabase.shared.isAvailable {
+                        return try CorpusDatabase.shared.loadCourseIndex(
+                            course: requestedCourse
+                        )
+                    }
+
+                    let loaded = try CorpusLoader.load(
+                        course: requestedCourse
+                    )
+                    return Corpus(
                         course: loaded.course,
                         entries: [],
                         units: loaded.units.map {
@@ -155,10 +165,15 @@ struct CourseHomeView: View {
                         topics: loaded.topics,
                         blockSize: loaded.blockSize
                     )
-                    CourseCorpusCache.shared.release(course: course)
+                }
 
-                case .failure(let error):
-                    loadError = error.localizedDescription
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success(let loaded):
+                        corpus = loaded
+                    case .failure(let error):
+                        loadError = error.localizedDescription
+                    }
                 }
             }
         }
@@ -238,7 +253,7 @@ final class CourseCorpusCache {
 
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result {
-                try CourseCorpusDiskCache.loadOrBuild(course: course)
+                try CorpusLoader.load(course: course)
             }
 
             DispatchQueue.main.async {

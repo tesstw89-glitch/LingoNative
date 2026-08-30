@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0A51DB000000000000000002 /* CorpusDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A51DB000000000000000001 /* CorpusDatabase.swift */; };
+		0A51DB000000000000000004 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 0A51DB000000000000000003 /* libsqlite3.tbd */; };
 		0539C8399D238FC1DEA63A45 /* CorpusLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2785D5A3339D7677385A88F /* CorpusLoader.swift */; };
 		084267DE3037B89000636515 /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 084267DC3037B68100636515 /* llama.xcframework */; };
 		084267DF3037B89000636515 /* llama.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 084267DC3037B68100636515 /* llama.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -62,6 +64,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0A51DB000000000000000001 /* CorpusDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorpusDatabase.swift; sourceTree = "<group>"; };
+		0A51DB000000000000000003 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.text-based-dylib-definition; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		05A03738AD1B67DE97D9848A /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		084267DC3037B68100636515 /* llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = llama.xcframework; sourceTree = "<group>"; };
 		084267E13037BBF500636515 /* LocalLanguageJudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLanguageJudge.swift; sourceTree = "<group>"; };
@@ -109,6 +113,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				084267DE3037B89000636515 /* llama.xcframework in Frameworks */,
+				0A51DB000000000000000004 /* libsqlite3.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -179,6 +184,7 @@
 				08D3535830375FB900E2A539 /* Fredoka-SemiBold.ttf */,
 				08D3535E30377EB700E2A539 /* duolingo-correct.mp3 */,
 				084267DC3037B68100636515 /* llama.xcframework */,
+				0A51DB000000000000000003 /* libsqlite3.tbd */,
 				08FB2D0B3039295800DCD571 /* NotoSansArabic-Medium.ttf */,
 				08FB2D0D303929AC00DCD571 /* NotoSansArabic-Regular.ttf */,
 				086D9C3E303DF1420038C6F9 /* Correct.mp3 */,
@@ -189,6 +195,7 @@
 		6EE67047A4B2648DDBB08231 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				0A51DB000000000000000001 /* CorpusDatabase.swift */,
 				084267E13037BBF500636515 /* LocalLanguageJudge.swift */,
 				B2785D5A3339D7677385A88F /* CorpusLoader.swift */,
 				B9CBC7AE596662E75A9E1D28 /* ProgressStore.swift */,
@@ -308,6 +315,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BB576BA49B125F1567D8DA83 /* SettingsStore.swift in Sources */,
+				0A51DB000000000000000002 /* CorpusDatabase.swift in Sources */,
 				E2A22B495454E14B04A46E93 /* SpeechServices.swift in Sources */,
 				69F7B8299982814679BDB3FD /* CourseHomeView.swift in Sources */,
 				A731196E1121549C576F2192 /* PracticeHubView.swift in Sources */,
