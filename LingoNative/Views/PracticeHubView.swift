@@ -2404,18 +2404,33 @@ private struct HeadphoneSpeakingPracticeView: View {
                 .background(Color.lingoPurple)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-                Button {
-                    skipCurrent()
-                } label: {
-                    Text("SKIP")
-                        .font(.custom("Fredoka-Medium", size: 15))
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: 12) {
+                    Button {
+                        hearCurrent()
+                    } label: {
+                        Label("Hear it", systemImage: "speaker.wave.2.fill")
+                            .font(.custom("Fredoka-Medium", size: 15))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(DuoButtonStyle(
+                        fill: Color.lingoBlue,
+                        shadow: Color.lingoBlue.opacity(0.65)
+                    ))
+                    .disabled(isTransitioning)
+
+                    Button {
+                        skipCurrent()
+                    } label: {
+                        Text("SKIP")
+                            .font(.custom("Fredoka-Medium", size: 15))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(DuoButtonStyle(
+                        fill: Color(.systemGray3),
+                        shadow: Color(.systemGray4)
+                    ))
+                    .disabled(isTransitioning)
                 }
-                .buttonStyle(DuoButtonStyle(
-                    fill: Color(.systemGray3),
-                    shadow: Color(.systemGray4)
-                ))
-                .disabled(isTransitioning)
             }
             .padding(20)
             .padding(.bottom, 40)
@@ -2507,6 +2522,39 @@ private struct HeadphoneSpeakingPracticeView: View {
 
         guard heardImportant == denominator.count else { return }
         finishCurrentCorrectly()
+    }
+
+    private func hearCurrent() {
+        guard hasStarted,
+              !isTransitioning,
+              let current else { return }
+
+        recognizer.pauseRecognition()
+        speaker.stop()
+        runTask?.cancel()
+
+        runTask = Task { @MainActor in
+            guard !Task.isCancelled,
+                  hasStarted,
+                  self.current?.id == current.id else { return }
+
+            speaker.speak(
+                current.foreign,
+                course: course,
+                rate: speechRate
+            )
+
+            await waitForSpeechToFinish()
+
+            guard !Task.isCancelled,
+                  hasStarted,
+                  self.current?.id == current.id else { return }
+
+            try? await Task.sleep(nanoseconds: 300_000_000)
+
+            guard !Task.isCancelled else { return }
+            recognizer.beginRecognition()
+        }
     }
 
     private func skipCurrent() {

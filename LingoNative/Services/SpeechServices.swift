@@ -16,6 +16,11 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
     /// When true, TTS must not replace that session with playback-only audio.
     var preservesActiveAudioSession = false
 
+    // When TTS hands the shared AVAudioSession directly to ordinary
+    // speech recognition, a late didCancel/didFinish callback must not
+    // deactivate the recorder's newly-started session.
+    private var suppressAudioSessionReleaseUntilNextSpeech = false
+
     override init() {
         super.init()
         synthesizer.delegate = self
@@ -83,6 +88,27 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
 
         isSpeaking = false
         releaseAudioSessionAfterTTS()
+    }
+
+    /// Stop TTS because the microphone is about to take over the shared
+    /// AVAudioSession. Suppress the delayed AVSpeechSynthesizer delegate
+    /// release that could otherwise deactivate the new recorder.
+    func stopForRecording() {
+        suppressAudioSessionReleaseUntilNextSpeech = true
+
+        elevenLabsTask?.cancel()
+        elevenLabsTask = nil
+
+        if elevenLabsPlayer?.isPlaying == true {
+            elevenLabsPlayer?.stop()
+        }
+        elevenLabsPlayer = nil
+
+        if synthesizer.isSpeaking {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+
+        isSpeaking = false
     }
 
     private static func bundledEnglishCueName(for text: String) -> String? {
@@ -403,6 +429,8 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
     }
 
     private func configureAudioSessionForTTS() {
+        suppressAudioSessionReleaseUntilNextSpeech = false
+
         if preservesActiveAudioSession { return }
 
         let session = AVAudioSession.sharedInstance()
@@ -421,7 +449,8 @@ final class SpeechSynthesizer: NSObject, ObservableObject, AVSpeechSynthesizerDe
     }
 
     private func releaseAudioSessionAfterTTS() {
-        guard !preservesActiveAudioSession else { return }
+        guard !preservesActiveAudioSession,
+              !suppressAudioSessionReleaseUntilNextSpeech else { return }
 
         do {
             try AVAudioSession.sharedInstance().setActive(
@@ -518,18 +547,27 @@ final class SpeechRecognizerService: ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var hasInputTap = false
 
+    // Cancelling Apple Speech may callback after the next run starts.
+    private var recognitionRunID = UUID()
+
     func start(localeIdentifier: String) async {
         stop()
+
+        let runID = UUID()
+        recognitionRunID = runID
+
         transcript = ""
         errorMessage = nil
 
         let speechStatus = await requestSpeechAuthorization()
+        guard recognitionRunID == runID else { return }
         guard speechStatus == .authorized else {
             errorMessage = "Speech recognition permission is needed for speaking practice."
             return
         }
 
         let microphoneAllowed = await requestMicrophonePermission()
+        guard recognitionRunID == runID else { return }
         guard microphoneAllowed else {
             errorMessage = "Microphone permission is needed for speaking practice."
             return
@@ -549,7 +587,7 @@ final class SpeechRecognizerService: ObservableObject {
             try audioSession.setCategory(
                 .record,
                 mode: .measurement,
-                options: [.duckOthers, .allowBluetooth]
+                options: [.duckOthers]
             )
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
@@ -571,6 +609,8 @@ final class SpeechRecognizerService: ObservableObject {
             recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 Task { @MainActor in
                     guard let self else { return }
+                    guard self.recognitionRunID == runID else { return }
+
                     if let result {
                         self.transcript = result.bestTranscription.formattedString
                     }
@@ -589,6 +629,9 @@ final class SpeechRecognizerService: ObservableObject {
     }
 
     func stop() {
+        // Invalidate callbacks from the run being stopped before cancellation.
+        recognitionRunID = UUID()
+
         if audioEngine.isRunning {
             audioEngine.stop()
         }
