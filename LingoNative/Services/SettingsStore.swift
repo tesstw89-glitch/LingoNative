@@ -385,3 +385,344 @@ extension LocalAIModelStore: URLSessionDownloadDelegate {
         }
     }
 }
+
+
+// MARK: - Local corpus text edits
+
+struct TermTextEdit: Codable, Hashable {
+    enum Kind: String, Codable {
+        case phrase
+        case lemma
+    }
+
+    let kind: Kind
+    let originalForeign: String
+    let originalEnglish: String
+    var foreign: String
+    var english: String
+}
+
+final class TermEditStore: ObservableObject {
+    static let shared = TermEditStore()
+
+    @Published private(set) var revision: Int = 0
+
+    private let defaults: UserDefaults
+    private let storageKey = "lingoNative.termTextEdits.v1"
+    private let lock = NSLock()
+    private var edits: [String: TermTextEdit]
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+
+        if let data = defaults.data(forKey: storageKey),
+           let decoded = try? JSONDecoder().decode(
+                [String: TermTextEdit].self,
+                from: data
+           ) {
+            edits = decoded
+        } else {
+            edits = [:]
+        }
+    }
+
+    static func phraseKey(
+        course: LanguageCourse,
+        phraseID: String
+    ) -> String {
+        "phrase:\(course.rawValue):\(phraseID)"
+    }
+
+    static func lemmaKey(
+        course: LanguageCourse,
+        foreign: String,
+        english: String
+    ) -> String {
+        "lemma:\(course.rawValue):\(component(foreign))||\(component(english))"
+    }
+
+    func effectiveText(
+        key: String,
+        foreign: String,
+        english: String
+    ) -> (foreign: String, english: String) {
+        lock.lock()
+        let edit = edits[key]
+        lock.unlock()
+
+        guard let edit else {
+            return (foreign, english)
+        }
+
+        return (edit.foreign, edit.english)
+    }
+
+    func hasEdit(forKey key: String) -> Bool {
+        lock.lock()
+        let exists = edits[key] != nil
+        lock.unlock()
+        return exists
+    }
+
+    func setPhrase(
+        course: LanguageCourse,
+        phraseID: String,
+        originalForeign: String,
+        originalEnglish: String,
+        foreign: String,
+        english: String
+    ) {
+        set(
+            key: Self.phraseKey(
+                course: course,
+                phraseID: phraseID
+            ),
+            edit: TermTextEdit(
+                kind: .phrase,
+                originalForeign: originalForeign,
+                originalEnglish: originalEnglish,
+                foreign: foreign,
+                english: english
+            )
+        )
+    }
+
+    func setLemma(
+        course: LanguageCourse,
+        originalForeign: String,
+        originalEnglish: String,
+        foreign: String,
+        english: String
+    ) {
+        set(
+            key: Self.lemmaKey(
+                course: course,
+                foreign: originalForeign,
+                english: originalEnglish
+            ),
+            edit: TermTextEdit(
+                kind: .lemma,
+                originalForeign: originalForeign,
+                originalEnglish: originalEnglish,
+                foreign: foreign,
+                english: english
+            )
+        )
+    }
+
+    func removeEdit(forKey key: String) {
+        lock.lock()
+        edits.removeValue(forKey: key)
+        let snapshot = edits
+        lock.unlock()
+
+        persist(snapshot)
+        revision &+= 1
+    }
+
+    func applying(
+        course: LanguageCourse,
+        to phrase: PhraseEntry
+    ) -> PhraseEntry {
+        let snapshot = snapshotForCourse(course)
+        guard !snapshot.isEmpty else { return phrase }
+
+        return Self.apply(
+            course: course,
+            phrase: phrase,
+            edits: snapshot
+        )
+    }
+
+    func applying(
+        course: LanguageCourse,
+        to entries: [PhraseEntry]
+    ) -> [PhraseEntry] {
+        let snapshot = snapshotForCourse(course)
+        guard !snapshot.isEmpty else { return entries }
+
+        return entries.map {
+            Self.apply(
+                course: course,
+                phrase: $0,
+                edits: snapshot
+            )
+        }
+    }
+
+    func applying(to corpus: Corpus) -> Corpus {
+        let snapshot = snapshotForCourse(corpus.course)
+        guard !snapshot.isEmpty else { return corpus }
+
+        let editedEntries = corpus.entries.map {
+            Self.apply(
+                course: corpus.course,
+                phrase: $0,
+                edits: snapshot
+            )
+        }
+
+        let entriesByID = Dictionary(
+            uniqueKeysWithValues: editedEntries.map { ($0.id, $0) }
+        )
+
+        let editedUnits = corpus.units.map { unit in
+            LearningUnit(
+                id: unit.id,
+                title: unit.title,
+                topicID: unit.topicID,
+                topicTitle: unit.topicTitle,
+                topicIcon: unit.topicIcon,
+                phrases: unit.phrases.map {
+                    entriesByID[$0.id]
+                        ?? Self.apply(
+                            course: corpus.course,
+                            phrase: $0,
+                            edits: snapshot
+                        )
+                },
+                phraseCount: unit.phraseCount
+            )
+        }
+
+        return Corpus(
+            course: corpus.course,
+            entries: editedEntries,
+            units: editedUnits,
+            topics: corpus.topics,
+            blockSize: corpus.blockSize
+        )
+    }
+
+    // StarStore keys lemmas by their original text. If the learner edits
+    // a lemma/chunk, resolve the edited form back to that original key.
+    func canonicalLemmaStarKey(
+        course: LanguageCourse,
+        foreign: String,
+        english: String
+    ) -> String {
+        let direct = Self.lemmaKey(
+            course: course,
+            foreign: foreign,
+            english: english
+        )
+
+        lock.lock()
+        defer { lock.unlock() }
+
+        if edits[direct] != nil {
+            return direct
+        }
+
+        let wantedForeign = Self.component(foreign)
+        let wantedEnglish = Self.component(english)
+        let prefix = "lemma:\(course.rawValue):"
+
+        for (key, edit) in edits
+        where key.hasPrefix(prefix) && edit.kind == .lemma {
+            if Self.component(edit.foreign) == wantedForeign,
+               Self.component(edit.english) == wantedEnglish {
+                return key
+            }
+        }
+
+        return direct
+    }
+
+    private func snapshotForCourse(
+        _ course: LanguageCourse
+    ) -> [String: TermTextEdit] {
+        let phrasePrefix = "phrase:\(course.rawValue):"
+        let lemmaPrefix = "lemma:\(course.rawValue):"
+
+        lock.lock()
+        let snapshot = edits.filter {
+            $0.key.hasPrefix(phrasePrefix)
+                || $0.key.hasPrefix(lemmaPrefix)
+        }
+        lock.unlock()
+
+        return snapshot
+    }
+
+    private static func apply(
+        course: LanguageCourse,
+        phrase: PhraseEntry,
+        edits: [String: TermTextEdit]
+    ) -> PhraseEntry {
+        let phraseKey = Self.phraseKey(
+            course: course,
+            phraseID: phrase.id
+        )
+
+        let phraseEdit = edits[phraseKey]
+
+        let editedLemmas = phrase.lemmas.map { lemma -> Lemma in
+            let lemmaKey = Self.lemmaKey(
+                course: course,
+                foreign: lemma.foreign,
+                english: lemma.english
+            )
+
+            guard let edit = edits[lemmaKey] else {
+                return lemma
+            }
+
+            return Lemma(
+                foreign: edit.foreign,
+                transliteration: lemma.transliteration,
+                english: edit.english
+            )
+        }
+
+        return PhraseEntry(
+            id: phrase.id,
+            topicID: phrase.topicID,
+            topicTitle: phrase.topicTitle,
+            foreign: phraseEdit?.foreign ?? phrase.foreign,
+            transliteration: phrase.transliteration,
+            tokens: phrase.tokens,
+            english: phraseEdit?.english ?? phrase.english,
+            lemmas: editedLemmas,
+            context: phrase.context
+        )
+    }
+
+    private func set(
+        key: String,
+        edit: TermTextEdit
+    ) {
+        lock.lock()
+        edits[key] = edit
+        let snapshot = edits
+        lock.unlock()
+
+        persist(snapshot)
+        revision &+= 1
+    }
+
+    private func persist(
+        _ snapshot: [String: TermTextEdit]
+    ) {
+        guard let data = try? JSONEncoder().encode(snapshot) else {
+            return
+        }
+
+        defaults.set(data, forKey: storageKey)
+    }
+
+    private static func component(
+        _ text: String
+    ) -> String {
+        text
+            .lowercased()
+            .replacingOccurrences(of: "’", with: "'")
+            .replacingOccurrences(
+                of: "\\s+",
+                with: " ",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+

@@ -13,6 +13,7 @@ struct CourseHomeView: View {
     @State private var loadError: String?
     @State private var selectedTab = 0
     @State private var isLoadingFullCorpus = false
+    @State private var fullCorpusEditRevision: Int?
 
     var body: some View {
         Group {
@@ -188,7 +189,20 @@ struct CourseHomeView: View {
     }
 
     private func loadFullCorpusIfNeeded() {
-        guard fullCorpus == nil, !isLoadingFullCorpus else { return }
+        let editRevision = TermEditStore.shared.revision
+
+        if fullCorpus != nil,
+           fullCorpusEditRevision == editRevision {
+            return
+        }
+
+        guard !isLoadingFullCorpus else { return }
+
+        if fullCorpus != nil {
+            fullCorpus = nil
+            CourseCorpusCache.shared.release(course: course)
+        }
+
         isLoadingFullCorpus = true
 
         CourseCorpusCache.shared.load(course: course) { result in
@@ -202,6 +216,7 @@ struct CourseHomeView: View {
             switch result {
             case .success(let loaded):
                 fullCorpus = loaded
+                fullCorpusEditRevision = editRevision
             case .failure(let error):
                 loadError = error.localizedDescription
             }
@@ -210,6 +225,7 @@ struct CourseHomeView: View {
 
     private func releaseFullCorpus() {
         fullCorpus = nil
+        fullCorpusEditRevision = nil
         isLoadingFullCorpus = false
         CourseCorpusCache.shared.release(course: course)
     }

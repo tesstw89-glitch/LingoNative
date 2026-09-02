@@ -178,12 +178,13 @@ struct QuizView: View {
 
             viewModel.useTranscript(transcript)
 
-            if session.completionNodeID != nil {
-                handleSpeakingTranscript(
-                    transcript,
-                    question: question
-                )
-            }
+            // Speaking recognition must work in both normal lessons AND
+            // Practice sessions. Practice sessions intentionally have no
+            // completionNodeID.
+            handleSpeakingTranscript(
+                transcript,
+                question: question
+            )
 
             viewModel.persistSnapshot(to: progress)
         }
@@ -1746,7 +1747,7 @@ struct QuizView: View {
                 if speechRecognizer.isRecording {
                     speechRecognizer.stop()
                 } else {
-                    speaker.stop()
+                    speaker.stopForRecording()
 
                     Task {
                         await speechRecognizer.start(
@@ -2210,7 +2211,7 @@ struct QuizView: View {
                 }
 
                 if !viewModel.isArabicPairMatchingBoard(question),
-                   !(question.type == .speaking && session.completionNodeID != nil) {
+                   question.type != .speaking {
                     Button(
                         question.type == .introduction
                             ? "GOT IT"

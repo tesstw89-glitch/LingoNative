@@ -77,25 +77,35 @@ enum CorpusLoader {
         course: LanguageCourse,
         topicID: String
     ) throws -> Corpus {
+        let loaded: Corpus
+
         if CorpusDatabase.shared.isAvailable {
-            return try CorpusDatabase.shared.loadTopic(
+            loaded = try CorpusDatabase.shared.loadTopic(
+                course: course,
+                topicID: topicID
+            )
+        } else {
+            loaded = try loadJSONTopic(
                 course: course,
                 topicID: topicID
             )
         }
-        return try loadJSONTopic(
-            course: course,
-            topicID: topicID
-        )
+
+        return TermEditStore.shared.applying(to: loaded)
     }
 
     static func load(course: LanguageCourse) throws -> Corpus {
+        let loaded: Corpus
+
         if CorpusDatabase.shared.isAvailable {
-            return try CorpusDatabase.shared.loadWholeCourse(
+            loaded = try CorpusDatabase.shared.loadWholeCourse(
                 course: course
             )
+        } else {
+            loaded = try loadJSONCourse(course: course)
         }
-        return try loadJSONCourse(course: course)
+
+        return TermEditStore.shared.applying(to: loaded)
     }
 
     private static func loadJSONTopic(

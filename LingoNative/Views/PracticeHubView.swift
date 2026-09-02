@@ -747,6 +747,7 @@ private struct VocabPracticeChooserView: View {
                 }
 
                 option(.multipleChoice, tint: .lingoGreen)
+                pairsOption
                 option(.write, tint: .lingoBlue)
                 if !nonHeadphoneModeEnabled {
                     option(.listenWrite, tint: .lingoGold)
@@ -757,6 +758,64 @@ private struct VocabPracticeChooserView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Practice Vocab")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var pairsOption: some View {
+        NavigationLink {
+            LemmaPairsView(
+                course: course,
+                lemmas: lemmas,
+                hapticsEnabled: hapticsEnabled,
+                onFinished: onFinished
+            )
+        } label: {
+            HStack(spacing: 16) {
+                Image(systemName: "rectangle.grid.2x2.fill")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(Color.lingoPurple)
+                    .frame(width: 54, height: 54)
+                    .background(Color.lingoPurple.opacity(0.13))
+                    .clipShape(
+                        RoundedRectangle(
+                            cornerRadius: 15,
+                            style: .continuous
+                        )
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Pairs")
+                        .font(.custom("Fredoka-Medium", size: 19))
+                        .foregroundStyle(Color.lingoInk)
+
+                    Text("Flip cards and match each lemma with its meaning")
+                        .font(.custom("Fredoka-Regular", size: 15))
+                        .foregroundStyle(Color.lingoMuted)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(Color.lingoMuted)
+            }
+            .padding(16)
+            .background(.white)
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: 18,
+                    style: .continuous
+                )
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: 18,
+                    style: .continuous
+                )
+                .stroke(Color.lingoLine, lineWidth: 2)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(lemmas.count < 2)
+        .opacity(lemmas.count < 2 ? 0.5 : 1)
     }
 
     private func option(_ mode: VocabPracticeMode, tint: Color) -> some View {
@@ -801,6 +860,675 @@ private struct VocabPracticeChooserView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Pairs: lemma memory matching
+
+private enum LemmaPairCardSide: Hashable {
+    case target
+    case english
+}
+
+private struct LemmaPairCard: Identifiable, Hashable {
+    let id: UUID
+    let pairID: String
+    let lemma: Lemma
+    let side: LemmaPairCardSide
+
+    init(
+        pairID: String,
+        lemma: Lemma,
+        side: LemmaPairCardSide
+    ) {
+        id = UUID()
+        self.pairID = pairID
+        self.lemma = lemma
+        self.side = side
+    }
+
+    var text: String {
+        switch side {
+        case .target:
+            return lemma.foreign
+        case .english:
+            return lemma.english
+        }
+    }
+}
+
+private struct LemmaPairsView: View {
+    let course: LanguageCourse
+    let lemmas: [Lemma]
+    let hapticsEnabled: Bool
+    let onFinished: (Int) -> Void
+
+    @State private var cards: [LemmaPairCard] = []
+    @State private var faceUpIDs: Set<UUID> = []
+    @State private var matchedPairIDs: Set<String> = []
+    @State private var mismatchIDs: Set<UUID> = []
+    @State private var isResolving = false
+
+    @State private var moves = 0
+    @State private var elapsedSeconds = 0
+    @State private var isFinished = false
+    @State private var runID = UUID()
+    @State private var didReportRun = false
+
+    @State private var feedbackTrigger = 0
+    @State private var lastFeedbackWasCorrect = true
+
+    private let cardsPerRound = 12
+
+    private var accent: Color {
+        course == .french
+            ? Color.lingoBlue
+            : Color.lingoGreen
+    }
+
+    private var targetLabel: String {
+        course.title.uppercased()
+    }
+
+    private var pairCount: Int {
+        cards.count / 2
+    }
+
+    private var matchedCount: Int {
+        matchedPairIDs.count
+    }
+
+    private var columns: [GridItem] {
+        [
+            GridItem(.flexible(), spacing: 10),
+            GridItem(.flexible(), spacing: 10),
+            GridItem(.flexible(), spacing: 10)
+        ]
+    }
+
+    var body: some View {
+        ZStack {
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
+
+            if cards.isEmpty {
+                ContentUnavailableView(
+                    "Not enough lemmas",
+                    systemImage: "rectangle.grid.2x2",
+                    description: Text(
+                        "Pairs needs at least two lemmas or chunks."
+                    )
+                )
+            } else {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        header
+                        instructions
+                        grid
+                    }
+                    .padding(18)
+                    .padding(.bottom, 30)
+                }
+            }
+
+            if isFinished {
+                completionCard
+            }
+        }
+        .navigationTitle("Pairs")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if cards.isEmpty {
+                startRound()
+            }
+        }
+        .task(id: runID) {
+            while !Task.isCancelled && !isFinished {
+                try? await Task.sleep(
+                    nanoseconds: 1_000_000_000
+                )
+
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                await MainActor.run {
+                    if !isFinished {
+                        elapsedSeconds += 1
+                    }
+                }
+            }
+        }
+        .sensoryFeedback(trigger: feedbackTrigger) { _, _ in
+            guard hapticsEnabled else {
+                return nil
+            }
+
+            return lastFeedbackWasCorrect
+                ? .success
+                : .error
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 9) {
+            statPill(
+                icon: "timer",
+                text: format(elapsedSeconds)
+            )
+
+            statPill(
+                icon: "checkmark.circle.fill",
+                text: "\(matchedCount)/\(pairCount)"
+            )
+
+            Spacer()
+
+            Text(
+                "\(moves) move\(moves == 1 ? "" : "s")"
+            )
+            .font(.custom("Fredoka-Medium", size: 14))
+            .foregroundStyle(Color.lingoMuted)
+        }
+    }
+
+    private var instructions: some View {
+        VStack(spacing: 5) {
+            Text("FIND THE PAIRS")
+                .font(.custom("Fredoka-SemiBold", size: 12))
+                .tracking(1.1)
+                .foregroundStyle(Color.lingoPurple)
+
+            Text(
+                "Match each \(course.title) lemma or chunk with its English meaning."
+            )
+            .font(.custom("Fredoka-Regular", size: 15))
+            .foregroundStyle(Color.lingoMuted)
+            .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private var grid: some View {
+        LazyVGrid(
+            columns: columns,
+            spacing: 10
+        ) {
+            ForEach(cards) { card in
+                pairCard(card)
+            }
+        }
+    }
+
+    private func pairCard(
+        _ card: LemmaPairCard
+    ) -> some View {
+        let isMatched =
+            matchedPairIDs.contains(card.pairID)
+
+        let isFaceUp =
+            faceUpIDs.contains(card.id) || isMatched
+
+        let isMismatch =
+            mismatchIDs.contains(card.id)
+
+        return ZStack {
+            cardFront(
+                card,
+                mismatch: isMismatch
+            )
+            .opacity(isFaceUp ? 1 : 0)
+
+            cardBack
+                .rotation3DEffect(
+                    .degrees(180),
+                    axis: (x: 0, y: 1, z: 0)
+                )
+                .opacity(isFaceUp ? 0 : 1)
+        }
+        .rotation3DEffect(
+            .degrees(isFaceUp ? 0 : 180),
+            axis: (x: 0, y: 1, z: 0),
+            perspective: 0.6
+        )
+        .animation(
+            .easeInOut(duration: 0.24),
+            value: isFaceUp
+        )
+        .opacity(isMatched ? 0.16 : 1)
+        .scaleEffect(isMatched ? 0.94 : 1)
+        .animation(
+            .easeOut(duration: 0.24),
+            value: isMatched
+        )
+        .contentShape(
+            RoundedRectangle(
+                cornerRadius: 16,
+                style: .continuous
+            )
+        )
+        .onTapGesture {
+            handleTap(card)
+        }
+        .allowsHitTesting(
+            !isMatched && !isResolving
+        )
+    }
+
+    private func cardFront(
+        _ card: LemmaPairCard,
+        mismatch: Bool
+    ) -> some View {
+        VStack(spacing: 7) {
+            HStack {
+                Text(
+                    card.side == .target
+                        ? targetLabel
+                        : "ENGLISH"
+                )
+                .font(.custom("Fredoka-SemiBold", size: 9))
+                .tracking(0.7)
+                .foregroundStyle(
+                    card.side == .target
+                        ? accent
+                        : Color.lingoBlue
+                )
+
+                Spacer()
+
+                StarButton(
+                    course: course,
+                    lemma: card.lemma
+                )
+                .scaleEffect(0.72)
+                .frame(
+                    width: 29,
+                    height: 29
+                )
+            }
+
+            Spacer(minLength: 0)
+
+            Text(card.text)
+                .font(
+                    course == .arabic
+                        && card.side == .target
+                        ? .custom(
+                            "NotoSansArabic-Regular",
+                            size: 17
+                        )
+                        : .custom(
+                            "Fredoka-Medium",
+                            size: 15
+                        )
+                )
+                .foregroundStyle(Color.lingoInk)
+                .multilineTextAlignment(.center)
+                .lineLimit(4)
+                .minimumScaleFactor(0.62)
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity
+                )
+
+            Spacer(minLength: 0)
+        }
+        .padding(9)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: 122,
+            maxHeight: 122
+        )
+        .background(
+            mismatch
+                ? Color.lingoWrong.opacity(0.10)
+                : Color.white
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 16,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 16,
+                style: .continuous
+            )
+            .stroke(
+                mismatch
+                    ? Color.lingoWrong
+                    : (
+                        card.side == .target
+                            ? accent.opacity(0.72)
+                            : Color.lingoBlue.opacity(0.58)
+                    ),
+                lineWidth: mismatch ? 3 : 2
+            )
+        }
+        .shadow(
+            color: .black.opacity(0.06),
+            radius: 0,
+            y: 3
+        )
+    }
+
+    private var cardBack: some View {
+        VStack(spacing: 8) {
+            Image(
+                systemName: "rectangle.grid.2x2.fill"
+            )
+            .font(.system(size: 27, weight: .bold))
+
+            Text("PAIR")
+                .font(.custom("Fredoka-SemiBold", size: 11))
+                .tracking(1.1)
+        }
+        .foregroundStyle(.white)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: 122,
+            maxHeight: 122
+        )
+        .background(
+            LinearGradient(
+                colors: [
+                    accent,
+                    Color.lingoPurple
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 16,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 16,
+                style: .continuous
+            )
+            .stroke(
+                Color.white.opacity(0.34),
+                lineWidth: 2
+            )
+        }
+        .shadow(
+            color: .black.opacity(0.10),
+            radius: 0,
+            y: 3
+        )
+    }
+
+    private func statPill(
+        icon: String,
+        text: String
+    ) -> some View {
+        Label(
+            text,
+            systemImage: icon
+        )
+        .font(.custom("Fredoka-Medium", size: 14))
+        .foregroundStyle(Color.lingoInk)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background(.white)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 12,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 12,
+                style: .continuous
+            )
+            .stroke(
+                Color.lingoLine,
+                lineWidth: 1.5
+            )
+        }
+    }
+
+    private var completionCard: some View {
+        VStack(spacing: 13) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(accent)
+
+            Text("Pairs complete!")
+                .font(.custom("Fredoka-Medium", size: 29))
+                .foregroundStyle(Color.lingoInk)
+
+            Text(
+                "\(pairCount) pairs · \(moves) moves · \(format(elapsedSeconds))"
+            )
+            .font(.custom("Fredoka-Regular", size: 16))
+            .foregroundStyle(Color.lingoMuted)
+
+            Button("PLAY AGAIN") {
+                startRound()
+            }
+            .font(.custom("Fredoka-Medium", size: 17))
+            .buttonStyle(
+                DuoButtonStyle(
+                    fill: accent,
+                    shadow: accent.opacity(0.68)
+                )
+            )
+        }
+        .padding(24)
+        .frame(maxWidth: 330)
+        .background(.white)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 22,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 22,
+                style: .continuous
+            )
+            .stroke(
+                Color.lingoLine,
+                lineWidth: 2
+            )
+        }
+        .shadow(
+            color: .black.opacity(0.16),
+            radius: 18,
+            y: 8
+        )
+        .padding(24)
+    }
+
+    private func startRound() {
+        let available =
+            deduplicatedLemmas()
+
+        let numberOfPairs = min(
+            cardsPerRound / 2,
+            available.count
+        )
+
+        guard numberOfPairs >= 2 else {
+            cards = []
+            return
+        }
+
+        let chosen = Array(
+            available
+                .shuffled()
+                .prefix(numberOfPairs)
+        )
+
+        var nextCards: [LemmaPairCard] = []
+
+        for lemma in chosen {
+            let pairID =
+                PracticeTextNormalizer.key(
+                    lemma.foreign
+                )
+                + "||"
+                + PracticeTextNormalizer.key(
+                    lemma.english
+                )
+
+            nextCards.append(
+                LemmaPairCard(
+                    pairID: pairID,
+                    lemma: lemma,
+                    side: .target
+                )
+            )
+
+            nextCards.append(
+                LemmaPairCard(
+                    pairID: pairID,
+                    lemma: lemma,
+                    side: .english
+                )
+            )
+        }
+
+        cards = nextCards.shuffled()
+        faceUpIDs = []
+        matchedPairIDs = []
+        mismatchIDs = []
+        isResolving = false
+        moves = 0
+        elapsedSeconds = 0
+        isFinished = false
+        didReportRun = false
+        runID = UUID()
+    }
+
+    private func deduplicatedLemmas() -> [Lemma] {
+        var seen = Set<String>()
+
+        return lemmas.filter { lemma in
+            let pairID =
+                PracticeTextNormalizer.key(
+                    lemma.foreign
+                )
+                + "||"
+                + PracticeTextNormalizer.key(
+                    lemma.english
+                )
+
+            return seen.insert(
+                pairID
+            ).inserted
+        }
+    }
+
+    private func handleTap(
+        _ card: LemmaPairCard
+    ) {
+        guard !isFinished,
+              !isResolving,
+              !matchedPairIDs.contains(card.pairID),
+              !faceUpIDs.contains(card.id) else {
+            return
+        }
+
+        faceUpIDs.insert(card.id)
+
+        let open = cards.filter {
+            faceUpIDs.contains($0.id)
+                && !matchedPairIDs.contains($0.pairID)
+        }
+
+        guard open.count == 2 else {
+            return
+        }
+
+        moves += 1
+        isResolving = true
+
+        let first = open[0]
+        let second = open[1]
+
+        let isMatch =
+            first.pairID == second.pairID
+            && first.side != second.side
+
+        if isMatch {
+            lastFeedbackWasCorrect = true
+            feedbackTrigger += 1
+
+            Task { @MainActor in
+                try? await Task.sleep(
+                    nanoseconds: 280_000_000
+                )
+
+                matchedPairIDs.insert(
+                    first.pairID
+                )
+                faceUpIDs.remove(
+                    first.id
+                )
+                faceUpIDs.remove(
+                    second.id
+                )
+                isResolving = false
+
+                if matchedPairIDs.count
+                    == pairCount {
+                    finishRound()
+                }
+            }
+        } else {
+            mismatchIDs = [
+                first.id,
+                second.id
+            ]
+
+            lastFeedbackWasCorrect = false
+            feedbackTrigger += 1
+
+            Task { @MainActor in
+                try? await Task.sleep(
+                    nanoseconds: 720_000_000
+                )
+
+                faceUpIDs.remove(
+                    first.id
+                )
+                faceUpIDs.remove(
+                    second.id
+                )
+                mismatchIDs.removeAll()
+                isResolving = false
+            }
+        }
+    }
+
+    private func finishRound() {
+        isFinished = true
+
+        guard !didReportRun else {
+            return
+        }
+
+        didReportRun = true
+        onFinished(pairCount)
+    }
+
+    private func format(
+        _ seconds: Int
+    ) -> String {
+        String(
+            format: "%d:%02d",
+            seconds / 60,
+            seconds % 60
+        )
     }
 }
 
@@ -2145,7 +2873,7 @@ private struct LanguageTrainerSpeakingPracticeView: View {
     }
 
     private func beginListening() {
-        speaker.stop()
+        speaker.stopForRecording()
         Task {
             await recognizer.start(localeIdentifier: course.speechLocaleIdentifier)
         }

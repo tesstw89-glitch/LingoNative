@@ -1176,7 +1176,11 @@ final class StarStore: ObservableObject {
         foreign: String,
         english: String
     ) -> String {
-        "lemma:\(course.rawValue):\(component(foreign))||\(component(english))"
+        TermEditStore.shared.canonicalLemmaStarKey(
+            course: course,
+            foreign: foreign,
+            english: english
+        )
     }
 
     func isStarred(course: LanguageCourse, phrase: PhraseEntry) -> Bool {
