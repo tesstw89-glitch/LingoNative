@@ -188,7 +188,9 @@ struct LearnPathView: View {
 
     private var activeNodeID: String? {
         for unit in corpus.units {
-            for node in unit.nodes() where !progress.isCompleted(node.id) {
+            for node in unit.nodes()
+            where !node.isReview
+                && !progress.isCompleted(node.id) {
                 return node.id
             }
         }

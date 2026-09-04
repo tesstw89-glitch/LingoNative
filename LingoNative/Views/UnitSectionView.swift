@@ -22,11 +22,25 @@ struct UnitSectionView: View {
     private let offsets: [CGFloat] = [0, 46, 72, 38, -16, -58, -76, -38]
 
     private var nodes: [LessonNode] { unit.nodes() }
-    private var normalLessonCount: Int { nodes.filter { !$0.isReview }.count }
+    private var normalNodes: [LessonNode] { nodes.filter { !$0.isReview } }
+    private var reviewNode: LessonNode? { nodes.first { $0.isReview } }
+    private var normalLessonCount: Int { normalNodes.count }
+
+    private var reviewUnlocked: Bool {
+        !normalNodes.isEmpty
+            && normalNodes.allSatisfy { progress.isCompleted($0.id) }
+    }
+
+    private var reviewAnchorIndex: Int? {
+        normalNodes.indices.max { lhs, rhs in
+            offsets[lhs % offsets.count]
+                < offsets[rhs % offsets.count]
+        }
+    }
 
     private var activeNodeInUnit: LessonNode? {
         guard let activeNodeID else { return nil }
-        return nodes.first { $0.id == activeNodeID }
+        return normalNodes.first { $0.id == activeNodeID }
     }
 
     var body: some View {
@@ -38,9 +52,9 @@ struct UnitSectionView: View {
             unitBanner
 
             VStack(spacing: 24) {
-                ForEach(Array(nodes.enumerated()), id: \.element.id) { nodeIndex, node in
+                ForEach(Array(normalNodes.enumerated()), id: \.element.id) { nodeIndex, node in
                     let completed = progress.isCompleted(node.id)
-                    let unlocked = isUnlocked(nodeIndex: nodeIndex)
+                    let unlocked = isNormalLessonUnlocked(nodeIndex: nodeIndex)
                     let current = node.id == activeNodeID
 
                     Group {
@@ -61,7 +75,7 @@ struct UnitSectionView: View {
                                     unlocked: true,
                                     isCurrent: current,
                                     progress: progress.lessonProgress(nodeID: node.id),
-                                    isLast: nodeIndex == nodes.count - 1
+                                    isLast: nodeIndex == normalNodes.count - 1
                                 )
                             }
                             .buttonStyle(.plain)
@@ -72,8 +86,17 @@ struct UnitSectionView: View {
                                 unlocked: false,
                                 isCurrent: false,
                                 progress: 0,
-                                isLast: nodeIndex == nodes.count - 1
+                                isLast: nodeIndex == normalNodes.count - 1
                             )
+                        }
+                    }
+                    .overlay {
+                        if let reviewAnchorIndex,
+                           nodeIndex == reviewAnchorIndex,
+                           let reviewNode {
+                            sideReviewButton(reviewNode)
+                                .offset(x: -110)
+                                .zIndex(20)
                         }
                     }
                     .id(node.id)
@@ -302,18 +325,85 @@ struct UnitSectionView: View {
         showPromptError = true
     }
 
-    private func isUnlocked(nodeIndex: Int) -> Bool {
-        if unitIndex == 0 && nodeIndex == 0 { return true }
+    @ViewBuilder
+    private func sideReviewButton(_ node: LessonNode) -> some View {
+        let completed = progress.isCompleted(node.id)
+        let available = reviewUnlocked || completed
 
-        if nodeIndex > 0 {
-            let previous = nodes[nodeIndex - 1]
-            return progress.isCompleted(previous.id)
+        Group {
+            if available {
+                NavigationLink {
+                    TopicLessonLoaderView(
+                        course: course,
+                        topicID: unit.topicID,
+                        unitID: unit.id,
+                        nodeID: node.id,
+                        progress: progress,
+                        settings: settings
+                    )
+                } label: {
+                    reviewAsset(completed: completed, available: true)
+                }
+                .buttonStyle(.plain)
+            } else {
+                reviewAsset(completed: false, available: false)
+            }
+        }
+        .saturation(available ? 1 : 0)
+        .accessibilityLabel(
+            available
+                ? "Review this unit"
+                : "Finish the unit to unlock review"
+        )
+    }
+
+    private func reviewAsset(
+        completed: Bool,
+        available: Bool
+    ) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Image("review")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 86, height: 86)
+
+            if completed {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(Color.lingoGreen)
+                    .background(
+                        Circle()
+                            .fill(Color.white)
+                    )
+            }
+        }
+        .frame(width: 94, height: 94)
+        .contentShape(Rectangle())
+    }
+
+    private func isNormalLessonUnlocked(nodeIndex: Int) -> Bool {
+        if unitIndex == 0 && nodeIndex == 0 {
+            return true
         }
 
-        guard unitIndex > 0 else { return true }
+        if nodeIndex > 0 {
+            return progress.isCompleted(
+                normalNodes[nodeIndex - 1].id
+            )
+        }
+
+        guard unitIndex > 0 else {
+            return true
+        }
+
         let previousUnit = allUnits[unitIndex - 1]
-        guard let lastNode = previousUnit.nodes().last else { return true }
-        return progress.isCompleted(lastNode.id)
+        let previousNormalNodes = previousUnit.nodes().filter { !$0.isReview }
+
+        guard let lastNormalNode = previousNormalNodes.last else {
+            return true
+        }
+
+        return progress.isCompleted(lastNormalNode.id)
     }
 }
 
@@ -428,16 +518,21 @@ private extension QuizSession {
             ? unit.phrases
             : SimilarityAwareLessonDealer.phrases(in: unit, for: node)
 
+        let resolvedExerciseTypes: Set<ExerciseType> =
+            node.isReview
+                ? [.typing]
+                : exerciseTypes
+
         return QuizSession(
             course: course,
             title: node.isReview ? "\(unit.title) Review" : unit.title,
             subtitle: node.isReview
-                ? "\(unit.topicTitle) · Unit Review"
+                ? "\(unit.topicTitle) · Write every phrase"
                 : "\(unit.topicTitle) · Lesson \(node.index + 1)",
             phrasePool: nodePhrases,
             allPhrases: allPhrases,
             sessionSize: max(1, nodePhrases.count),
-            exerciseTypes: exerciseTypes,
+            exerciseTypes: resolvedExerciseTypes,
             completionNodeID: node.id
         )
     }

@@ -48,6 +48,24 @@ final class QuizViewModel: ObservableObject {
     var canOverrideWrong: Bool {
         pendingManualReview != nil && status == .wrong
     }
+
+    var shouldShowReferenceAnswer: Bool {
+        guard status == .correct,
+              let question = currentQuestion,
+              question.direction == .englishToForeign else {
+            return false
+        }
+
+        let response = responseText(for: question)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !response.isEmpty else { return false }
+
+        // Ignore superficial differences such as spaces, punctuation and case.
+        // If the accepted target-language wording itself differs from the
+        // corpus answer, show the corpus/reference answer in feedback.
+        return Self.normalize(response) != Self.normalize(question.correctAnswer)
+    }
     /// New phrases clear two distinct non-writing formats before free production.
     /// UNDERSTAND -> BUILD -> WRITE -> SPEAK.
     /// The legacy variedRecall slot remains in the enum but is deliberately skipped.
@@ -191,8 +209,10 @@ final class QuizViewModel: ObservableObject {
         switch question.type {
         case .introduction:
             return true
-        case .multipleChoice, .fillBlank, .lemma:
+        case .multipleChoice, .lemma:
             return selectedAnswer != nil
+        case .fillBlank:
+            return !typedAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .matching:
             if Self.isArabicPairMatchingQuestion(question) {
                 return !question.wordBankTokens.isEmpty
@@ -719,9 +739,9 @@ final class QuizViewModel: ObservableObject {
         switch question.type {
         case .introduction:
             return ""
-        case .multipleChoice, .fillBlank, .matching, .lemma:
+        case .multipleChoice, .matching, .lemma:
             return selectedAnswer ?? ""
-        case .typing, .listenWrite, .speaking:
+        case .typing, .fillBlank, .listenWrite, .speaking:
             return typedAnswer
         case .listening:
             return question.wordBankTokens.isEmpty ? typedAnswer : wordBankAnswer
@@ -833,7 +853,8 @@ final class QuizViewModel: ObservableObject {
         if !isArabicPairCheckpoint && status == .wrong {
             // Immediate rescue: a missed WRITE is followed by the same phrase as drag-and-drop.
             // This is EXTRA remediation only; the original write retry still comes back later.
-            if question.type == .typing || question.type == .listenWrite {
+            if !session.isUnitReview
+                && (question.type == .typing || question.type == .listenWrite) {
                 let rescue = Self.makeQuestion(
                     phrase: question.phrase,
                     type: .wordBank,
@@ -875,6 +896,7 @@ final class QuizViewModel: ObservableObject {
 
     private func insertArabicLemmaCheckpointIfNeeded() {
         guard session.course == .arabic,
+              !session.isUnitReview,
               session.completionNodeID != nil,
               currentIndex < questions.count,
               !Self.isArabicLemmaCheckpointQuestion(questions[currentIndex]) else { return }
@@ -981,12 +1003,14 @@ final class QuizViewModel: ObservableObject {
     }
 
     private static func lessonFlowVersion(for session: QuizSession) -> Int {
-        // A saved lesson should represent the learner's place in that lesson.
-        // Audio availability is a runtime preference, not a reason to throw the
-        // saved session away. Keep only structural lesson-shape changes here.
+        // Saved lesson questions must respect the CURRENT audio-exercise settings.
+        // If Listening or Speaking is toggled, rebuild the saved question queue
+        // rather than resurrecting questions that are now disabled.
         lessonFlowVersionBase
             + (session.course == .arabic ? 1700 : 0)
-            + (session.isUnitReview ? 400 : 0)
+            + (session.isUnitReview ? 401 : 0)
+            + (!criticalExerciseEnabled(.listening, in: session) ? 100 : 0)
+            + (!criticalExerciseEnabled(.speaking, in: session) ? 200 : 0)
     }
 
     private static func savedLessonFlowIsCompatible(
@@ -994,24 +1018,7 @@ final class QuizViewModel: ObservableObject {
         session: QuizSession
     ) -> Bool {
         guard let savedVersion else { return false }
-
-        let stableVersion = lessonFlowVersion(for: session)
-
-        if savedVersion == stableVersion {
-            return true
-        }
-
-        // Migration for sessions saved before audio mode stopped being part
-        // of the flow version:
-        //   +100 = listening disabled
-        //   +200 = speaking disabled
-        //   +300 = both disabled (Non-headphone mode)
-        //
-        // Accepting these lets an in-progress lesson survive a Headphone /
-        // Non-headphone mode change instead of starting again at question 1.
-        return savedVersion == stableVersion + 100
-            || savedVersion == stableVersion + 200
-            || savedVersion == stableVersion + 300
+        return savedVersion == lessonFlowVersion(for: session)
     }
 
     private static func criticalExerciseEnabled(_ type: ExerciseType, in session: QuizSession) -> Bool {
@@ -1070,6 +1077,22 @@ final class QuizViewModel: ObservableObject {
 
     private static func makeQuestions(session: QuizSession, progressStore: ProgressStore) -> [QuizQuestion] {
         guard !session.phrasePool.isEmpty else { return [] }
+
+        if session.isUnitReview {
+            return session.phrasePool
+                .shuffled()
+                .enumerated()
+                .map { index, phrase in
+                    makeQuestion(
+                        phrase: phrase,
+                        type: .typing,
+                        stage: .freeRecall,
+                        index: index,
+                        phrasePool: session.phrasePool,
+                        allPhrases: session.allPhrases
+                    )
+                }
+        }
 
         if isOpenCorpusListeningPractice(session) {
             let selected = Array(
@@ -2151,19 +2174,108 @@ final class QuizViewModel: ObservableObject {
         return ([correct] + distractors).shuffled()
     }
 
+    private static let clozeExcludedWords: Set<String> = [
+        // Spanish articles / determiners
+        "el", "la", "los", "las",
+        "un", "una", "unos", "unas",
+        "este", "esta", "estos", "estas",
+        "ese", "esa", "esos", "esas",
+        "esto", "eso", "aquello",
+        "mi", "mis", "tu", "tus", "su", "sus", "sí", "no",
+
+        // Spanish pronouns / clitics
+        "yo", "tú", "tu", "él", "ella",
+        "nosotros", "nosotras", "vosotros", "vosotras",
+        "ellos", "ellas",
+        "me", "te", "se", "nos", "os",
+        "lo", "le", "les",
+
+        // Spanish very basic connectors / prepositions
+        "y", "e", "o", "u",
+        "a", "de", "del", "al", "en", "con",
+        "que", "pero",
+
+        // Spanish very basic copula / auxiliary forms
+        "es", "son", "está", "estan", "están",
+        "hay", "ha", "han",
+
+        // French articles / determiners
+        "le", "la", "les",
+        "un", "une", "des",
+        "du", "de", "d",
+        "ce", "cet", "cette", "ces",
+        "mon", "ma", "mes",
+        "ton", "ta", "tes",
+        "son", "sa", "ses",
+        "notre", "nos", "votre", "vos",
+        "leur", "leurs",
+
+        // French pronouns / clitics
+        "je", "j", "tu", "il", "elle", "on",
+        "nous", "vous", "ils", "elles",
+        "me", "m", "te", "t", "se", "s",
+        "y", "en", "le", "la", "les",
+        "lui",
+
+        // French basic connectors / prepositions
+        "et", "ou", "mais", "que", "qui",
+        "à", "a", "au", "aux",
+        "de", "du", "des", "en",
+
+        // French basic copula / auxiliary forms
+        "est", "es", "sont",
+        "ai", "as", "a", "avons", "avez", "ont"
+    ]
+
+    private static func clozeKey(_ token: String) -> String {
+        cleanedWord(token)
+            .lowercased()
+            .folding(
+                options: [.diacriticInsensitive],
+                locale: Locale(identifier: "en_US_POSIX")
+            )
+            .replacingOccurrences(of: "’", with: "'")
+    }
+
     private static func makeCloze(
         for phrase: PhraseEntry,
         phrasePool: [PhraseEntry],
         allPhrases: [PhraseEntry]
     ) -> (text: String, answer: String, options: [String]) {
         let rawTokens = tokens(from: phrase.foreign)
+
         guard rawTokens.count >= 2 else {
             return ("____", phrase.foreign, [phrase.foreign])
         }
 
-        let eligible = rawTokens.indices.filter { cleanedWord(rawTokens[$0]).count >= 2 }
-        let targetIndex = eligible.randomElement() ?? rawTokens.indices.last!
+        let basicEligible = rawTokens.indices.filter {
+            cleanedWord(rawTokens[$0]).count >= 2
+        }
+
+        let useful = basicEligible.filter {
+            !clozeExcludedWords.contains(clozeKey(rawTokens[$0]))
+        }
+
+        // Prefer a more substantial lexical word when possible,
+        // without making length itself a hard requirement.
+        let preferred = useful.filter {
+            cleanedWord(rawTokens[$0]).count >= 4
+        }
+
+        let targetPool: [Int]
+        if !preferred.isEmpty {
+            targetPool = preferred
+        } else if !useful.isEmpty {
+            targetPool = useful
+        } else {
+            // Safety fallback: never make cloze generation fail just because
+            // a very short phrase contains only excluded function words.
+            targetPool = basicEligible
+        }
+
+        let targetIndex = targetPool.randomElement() ?? rawTokens.indices.last!
         let answer = cleanedWord(rawTokens[targetIndex])
+        let answerKey = clozeKey(answer)
 
         let blanked = rawTokens.enumerated().map { index, token in
             index == targetIndex ? "____" : token
@@ -2172,18 +2284,32 @@ final class QuizViewModel: ObservableObject {
         let candidateWords = (phrasePool.shuffled() + allPhrases.shuffled())
             .flatMap { tokens(from: $0.foreign) }
             .map(cleanedWord)
-            .filter { $0.count >= 2 && $0 != answer }
+            .filter {
+                $0.count >= 2
+                    && clozeKey($0) != answerKey
+                    && !clozeExcludedWords.contains(clozeKey($0))
+            }
 
-        var seen = Set<String>([answer])
+        var seen = Set<String>([answerKey])
         var distractors: [String] = []
+
         for word in candidateWords {
-            if seen.insert(word).inserted {
+            let key = clozeKey(word)
+
+            if seen.insert(key).inserted {
                 distractors.append(word)
             }
-            if distractors.count == 3 { break }
+
+            if distractors.count == 3 {
+                break
+            }
         }
 
-        return (blanked, answer, ([answer] + distractors).shuffled())
+        return (
+            blanked,
+            answer,
+            ([answer] + distractors).shuffled()
+        )
     }
 
     private static func partialCredit(
@@ -2271,6 +2397,63 @@ final class QuizViewModel: ObservableObject {
             .filter { !$0.isEmpty }
     }
     
+    private static func deterministicEquivalentKey(_ text: String) -> String {
+        var value = text
+            .lowercased()
+            .folding(
+                options: [.diacriticInsensitive],
+                locale: Locale(identifier: "en_US_POSIX")
+            )
+            .replacingOccurrences(of: "’", with: "'")
+
+        let replacements: [(String, String)] = [
+            (#"\bil\s+n'y\s+en\s+a\b"#, "y en a"),
+            (#"\bil\s+y\s+en\s+a\b"#, "y en a"),
+            (#"\bil\s+n'y\s+a\b"#, "y a"),
+            (#"\bil\s+y\s+a\b"#, "y a"),
+
+            (#"\bil\s+faudrait\b"#, "faudrait"),
+            (#"\bil\s+faut\b"#, "faut"),
+            (#"\bil\s+vaut\s+mieux\b"#, "vaut mieux"),
+
+            (#"\bt'as\b"#, "tu as"),
+            (#"\bt'es\b"#, "tu es"),
+            (#"\bt'avais\b"#, "tu avais"),
+            (#"\bt'etais\b"#, "tu etais"),
+
+            (#"\bj'suis\b"#, "je suis"),
+            (#"\bj'vais\b"#, "je vais"),
+            (#"\bj'peux\b"#, "je peux"),
+            (#"\bj'veux\b"#, "je veux"),
+            (#"\bj'sais\b"#, "je sais"),
+            (#"\bj'crois\b"#, "je crois"),
+            (#"\bj'te\b"#, "je te"),
+            (#"\bj'me\b"#, "je me")
+        ]
+
+        for (pattern, replacement) in replacements {
+            value = value.replacingOccurrences(
+                of: pattern,
+                with: replacement,
+                options: .regularExpression
+            )
+        }
+
+        value = value.replacingOccurrences(
+            of: #"\bne\s+(?=[^.!?]{0,80}\b(?:pas|plus|jamais|rien|personne|aucun|aucune|guere|que)\b)"#,
+            with: "",
+            options: .regularExpression
+        )
+
+        value = value.replacingOccurrences(
+            of: #"\bn'(?=[^.!?]{0,80}\b(?:pas|plus|jamais|rien|personne|aucun|aucune|guere|que)\b)"#,
+            with: "",
+            options: .regularExpression
+        )
+
+        return normalize(value)
+    }
+
     static func answersMatch(_ lhs: String, _ rhs: String) -> Bool {
         // A slash in the corpus means "either translation is valid", not
         // "the learner must reproduce both alternatives in this order".
@@ -2289,6 +2472,10 @@ final class QuizViewModel: ObservableObject {
                Set(lhsAlternatives) == Set(rhsAlternatives) {
                 return true
             }
+        }
+
+        if deterministicEquivalentKey(lhs) == deterministicEquivalentKey(rhs) {
+            return true
         }
 
         return normalize(lhs) == normalize(rhs)

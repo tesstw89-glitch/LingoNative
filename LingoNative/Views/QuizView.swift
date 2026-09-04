@@ -16,6 +16,7 @@ struct QuizView: View {
     @State private var didRecordCompletion = false
     @State private var emergencyRefillPresentation: EmergencyRefillPresentation?
     @State private var showContextOverlay = false
+    @State private var showInitialHintOverlay = false
     @State private var showExitConfirmation = false
     @State private var showEditorNoteEditor = false
     @State private var showEditorNoteOverlay = false
@@ -63,6 +64,7 @@ struct QuizView: View {
                         speechRecognizer.stop()
                         showEditorNoteOverlay = false
                         showContextOverlay = false
+                        showInitialHintOverlay = false
 
                         let shouldAutoplayTargetLanguage =
                             !viewModel.isArabicPairMatchingBoard(question)
@@ -154,6 +156,9 @@ struct QuizView: View {
         .overlay {
             contextOverlay
         
+        }
+        .overlay {
+            initialHintOverlay
         }
         .onAppear {
             viewModel.persistSnapshot(to: progress)
@@ -301,21 +306,42 @@ struct QuizView: View {
                                 : Color.lingoGreen
                         )
 
-                    if !question.phrase.context
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                        .isEmpty {
+                    HStack(spacing: 2) {
+                        if !question.phrase.context
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty {
 
-                        Button {
-                            withAnimation(.easeOut(duration: 0.16)) {
-                                showContextOverlay = true
+                            Button {
+                                withAnimation(.easeOut(duration: 0.16)) {
+                                    showInitialHintOverlay = false
+                                    showEditorNoteOverlay = false
+                                    showContextOverlay = true
+                                }
+                            } label: {
+                                Image(systemName: "lightbulb.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundStyle(Color.lingoGold)
+                                    .frame(width: 44, height: 44)
                             }
-                        } label: {
-                            Image(systemName: "lightbulb.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(Color.lingoGold)
-                                .frame(width: 44, height: 44)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+
+                        if shouldShowInitialHint(for: question) {
+                            Button {
+                                withAnimation(.easeOut(duration: 0.16)) {
+                                    showContextOverlay = false
+                                    showEditorNoteOverlay = false
+                                    showInitialHintOverlay = true
+                                }
+                            } label: {
+                                Image(systemName: "questionmark.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundStyle(Color.lingoBlue)
+                                    .frame(width: 44, height: 44)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Show first-letter hint")
+                        }
                     }
                 }
 
@@ -533,6 +559,116 @@ struct QuizView: View {
                     }
                 }
             }
+
+    @ViewBuilder
+    private var initialHintOverlay: some View {
+        if showInitialHintOverlay,
+           let question = viewModel.currentQuestion,
+           shouldShowInitialHint(for: question) {
+
+            ZStack {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+
+                VStack {
+                    Spacer(minLength: 90)
+
+                    HStack(alignment: .top, spacing: 14) {
+                        Image(systemName: "questionmark.circle.fill")
+                            .font(.system(size: 34))
+                            .foregroundStyle(Color.lingoBlue)
+                            .frame(width: 54, height: 54)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("FIRST-LETTER HINT")
+                                .font(.custom("Fredoka-SemiBold", size: 12))
+                                .tracking(1)
+                                .foregroundStyle(Color.lingoMuted)
+
+                            Text(initialLetterHint(for: question.correctAnswer))
+                                .font(
+                                    lessonTextFont(
+                                        initialLetterHint(for: question.correctAnswer),
+                                        fredoka: "Fredoka-Medium",
+                                        size: 21
+                                    )
+                                )
+                                .foregroundStyle(Color.lingoInk)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(18)
+                    .background(Color.white)
+                    .clipShape(
+                        RoundedRectangle(
+                            cornerRadius: 20,
+                            style: .continuous
+                        )
+                    )
+                    .overlay {
+                        RoundedRectangle(
+                            cornerRadius: 20,
+                            style: .continuous
+                        )
+                        .stroke(Color.lingoLine, lineWidth: 2)
+                    }
+                    .shadow(
+                        color: .black.opacity(0.14),
+                        radius: 18,
+                        y: 8
+                    )
+                    .padding(.horizontal, 24)
+
+                    Spacer()
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    showInitialHintOverlay = false
+                }
+            }
+            .transition(.opacity)
+        }
+    }
+
+    private func shouldShowInitialHint(
+        for question: QuizQuestion
+    ) -> Bool {
+        if viewModel.isArabicPairMatchingBoard(question) {
+            return false
+        }
+
+        switch question.type {
+        case .introduction, .listening, .listenWrite, .speaking:
+            return false
+        default:
+            return true
+        }
+    }
+
+    private func initialLetterHint(for text: String) -> String {
+        text
+            .split(whereSeparator: { $0.isWhitespace })
+            .compactMap { rawToken -> String? in
+                let token = String(rawToken)
+
+                if token == "/" {
+                    return "/"
+                }
+
+                guard let first = token.first(where: {
+                    $0.isLetter || $0.isNumber
+                }) else {
+                    return nil
+                }
+
+                return String(first).lowercased() + "___"
+            }
+            .joined(separator: " ")
+    }
 
     @ViewBuilder
     private var editorNoteOverlay: some View {
@@ -1490,17 +1626,94 @@ struct QuizView: View {
     private func fillBlankExercise(_ question: QuizQuestion) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(question.blankedText ?? "____")
-                .font(lessonTextFont(question.blankedText ?? "____", fredoka: "Fredoka-Medium", size: 20))
+                .font(
+                    lessonTextFont(
+                        question.blankedText ?? "____",
+                        fredoka: "Fredoka-Medium",
+                        size: 20
+                    )
+                )
                 .foregroundStyle(Color.lingoInk)
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: 14,
+                        style: .continuous
+                    )
+                )
 
-            VStack(spacing: 12) {
-                ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
-                    answerRow(option: option, index: index, question: question)
+            if session.course == .arabic {
+                Text(
+                    viewModel.typedAnswer.isEmpty
+                        ? "Missing word…"
+                        : viewModel.typedAnswer
+                )
+                .font(
+                    viewModel.typedAnswer.isEmpty
+                        ? .custom("Fredoka-Regular", size: 17)
+                        : .custom("NotoSansArabic-Regular", size: 23)
+                )
+                .foregroundStyle(
+                    viewModel.typedAnswer.isEmpty
+                        ? Color.lingoMuted
+                        : Color.lingoInk
+                )
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: 56,
+                    alignment: .trailing
+                )
+                .padding(.horizontal, 16)
+                .background(Color.white)
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: 14,
+                        style: .continuous
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: 14,
+                        style: .continuous
+                    )
+                    .stroke(Color.lingoLine, lineWidth: 2)
                 }
+                .environment(\.layoutDirection, .rightToLeft)
+
+                arabicWriteKeyboard
+            } else {
+                TextField(
+                    "Type the missing word",
+                    text: $viewModel.typedAnswer
+                )
+                .font(.custom("Fredoka-Regular", size: 17))
+                .foregroundColor(Color.lingoInk)
+                .tint(Color.lingoBlue)
+                .environment(\.colorScheme, .light)
+                .padding(16)
+                .background(Color.white)
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: 14,
+                        style: .continuous
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: 14,
+                        style: .continuous
+                    )
+                    .stroke(Color.lingoLine, lineWidth: 2)
+                }
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($answerFieldFocused)
+                .disabled(
+                    viewModel.status != .unanswered
+                        || viewModel.isCheckingAlternative
+                )
             }
         }
     }
@@ -2137,11 +2350,11 @@ struct QuizView: View {
 
                             Text("Recent chunks matched")
                                 .font(.custom("Fredoka-Regular", size: 15))
-                        } else if viewModel.aiAlternativeAccepted {
+                        } else if viewModel.shouldShowReferenceAnswer {
                             Text("Correct")
                                 .font(.custom("Fredoka-Medium", size: 17))
 
-                            Text("Alternative answer:")
+                            Text("Reference answer:")
                                 .font(.custom("Fredoka-Regular", size: 13))
                                 .foregroundStyle(Color.lingoMuted)
 
@@ -2930,7 +3143,8 @@ private enum LessonSpeakNormalizer {
         ["tout", "tous"],
         ["cou", "coup"],
         ["plutôt", "plus tôt"],
-        ["plus", "plu"]
+        ["plus", "plu"],
+        ["sous", "sou"]
     ]
 
     // Common regular -er verbs. For these stems:
