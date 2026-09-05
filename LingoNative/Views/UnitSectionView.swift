@@ -105,7 +105,7 @@ struct UnitSectionView: View {
             }
             .padding(.vertical, 4)
         }
-        .alert("Couldn’t start ChatGPT practice", isPresented: $showPromptError) {
+        .alert("Couldn’t open ChatGPT", isPresented: $showPromptError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(promptErrorMessage)
@@ -177,9 +177,33 @@ struct UnitSectionView: View {
     private var unitBanner: some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("UNIT \(unitIndex + 1)")
-                    .font(.custom("Fredoka-Bold", size: 14))
-                    .foregroundStyle(.white.opacity(0.85))
+                HStack(spacing: 8) {
+                    Text("UNIT \(unitIndex + 1)")
+                        .font(.custom("Fredoka-Bold", size: 14))
+                        .foregroundStyle(.white.opacity(0.85))
+
+                    Button(action: startUnitProofread) {
+                        Image(systemName: "text.magnifyingglass")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(.white.opacity(0.18))
+                            .clipShape(
+                                RoundedRectangle(
+                                    cornerRadius: 9,
+                                    style: .continuous
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        "Proofread this unit with ChatGPT"
+                    )
+                    .accessibilityHint(
+                        "Copies all sentences from this unit and opens ChatGPT"
+                    )
+                }
+
                 Text(unit.title)
                     .font(.custom("Fredoka-Medium", size: 18))
                     .foregroundStyle(.white)
@@ -280,6 +304,171 @@ struct UnitSectionView: View {
         default:
             return Color.lingoBlue
 
+        }
+    }
+
+    private var proofreadingRegisterNote: String {
+        switch course {
+        case .french:
+            return """
+            IMPORTANT: This corpus deliberately contains natural informal/spoken French. Preserve the intended informal register. In particular, do NOT "correct" features merely because a more formal alternative exists — for example dropped "ne", "y a" instead of "il y a", contractions, colloquial vocabulary, discourse markers or other normal spoken constructions. Only recommend a change when the French is genuinely incorrect, unnatural or awkward in the intended informal register.
+            """
+
+        case .spanish:
+            return """
+            IMPORTANT: This corpus deliberately contains natural informal Madrid Spanish. Preserve the intended conversational register, contractions, colloquial wording and normal spoken constructions. Do not formalise a sentence merely because a more formal or textbook alternative exists. Only recommend a change when the Spanish is genuinely incorrect, unnatural or awkward.
+            """
+
+        case .arabic:
+            return """
+            IMPORTANT: This corpus deliberately contains colloquial Lebanese Arabic. Preserve the intended spoken Lebanese register. Do not convert colloquial Lebanese wording into Modern Standard Arabic merely because the MSA form is more formal. Only recommend a change when the Arabic is genuinely incorrect, unnatural or awkward in Lebanese usage.
+            """
+        }
+    }
+
+    private func unitProofreadPrompt(
+        for proofreadUnit: LearningUnit
+    ) -> String {
+        let sentenceList = proofreadUnit.phrases
+            .enumerated()
+            .map { index, phrase in
+                """
+                \(index + 1). Phrase ID: \(phrase.id)
+                \(course.title): \(phrase.foreign)
+                English: \(phrase.english)
+                """
+            }
+            .joined(separator: "\n\n")
+
+        return """
+        Please proofread the \(course.title) sentences in this LingoNative unit.
+
+        UNIT
+        Topic: \(proofreadUnit.topicTitle)
+        Unit: \(proofreadUnit.title)
+        Unit ID: \(proofreadUnit.id)
+
+        Please check every target-language sentence for:
+        - genuine grammatical errors
+        - spelling or punctuation errors
+        - wording that would sound incorrect, unnatural or awkward to a native speaker
+        - accidental mismatches with the intended English meaning
+
+        Preserve the intended meaning and register. Do not rewrite sentences simply because you personally prefer another perfectly valid formulation.
+
+        \(proofreadingRegisterNote)
+
+        Please be conservative. If a sentence is already natural and correct in the intended register, leave it alone.
+
+        For every sentence that genuinely needs changing, show me:
+
+        Original:
+        ...
+
+        Correction:
+        ...
+
+        Reason:
+        ...
+
+        Keep the reason brief.
+
+        If no change is needed to a sentence, you do not need to discuss it.
+
+        After reviewing the whole unit, if ANY changes are required, give me ONE pasteable Terminal patch for my local LingoNative repository:
+
+        https://github.com/tesstw89-glitch/LingoNative.git
+
+        My local repo is:
+
+        ~/Downloads/LingoNative
+
+        The Terminal patch must:
+        - begin with: cd ~/Downloads/LingoNative
+        - make a backup before changing every affected file
+        - locate the exact corpus entry or entries that need correcting
+        - use the Phrase IDs and exact existing text where useful so the correct entry is changed
+        - change only the fields that genuinely need changing
+        - preserve IDs, unit IDs, lemmas, contexts, English translations and unrelated data unless one of those fields genuinely needs updating because of the correction
+        - preserve the JSON structure and formatting as much as possible
+        - NOT rewrite or reformat an entire corpus file unnecessarily
+        - fail safely if an expected entry cannot be located unambiguously
+        - NOT use git add -A
+        - NOT commit
+        - NOT push
+        - finish with:
+          git diff --check
+          git diff --stat
+
+        Please give me the proofreading findings first and the Terminal patch second.
+
+        SENTENCES IN THIS UNIT
+
+        \(sentenceList)
+        """
+    }
+
+    private func startUnitProofread() {
+        guard !isPreparingChatGPT else { return }
+
+        isPreparingChatGPT = true
+
+        TopicCorpusCache.shared.load(
+            course: course,
+            topicID: unit.topicID
+        ) { result in
+            switch result {
+            case .failure(let error):
+                isPreparingChatGPT = false
+                showPromptFailure(
+                    "The unit couldn’t be loaded: \(error.localizedDescription)"
+                )
+
+            case .success(let topicCorpus):
+                guard let loadedUnit = topicCorpus.units.first(
+                    where: { $0.id == unit.id }
+                ) else {
+                    isPreparingChatGPT = false
+                    showPromptFailure(
+                        "The unit couldn’t be found in the loaded topic."
+                    )
+                    return
+                }
+
+                guard !loadedUnit.phrases.isEmpty else {
+                    isPreparingChatGPT = false
+                    showPromptFailure(
+                        "There are no sentences in this unit to proofread."
+                    )
+                    return
+                }
+
+                let prompt = unitProofreadPrompt(
+                    for: loadedUnit
+                )
+
+                UIPasteboard.general.string = prompt
+                isPreparingChatGPT = false
+
+                guard let chatGPTURL = URL(
+                    string: "https://chatgpt.com/"
+                ) else {
+                    showPromptFailure(
+                        "ChatGPT couldn’t be opened."
+                    )
+                    return
+                }
+
+                openURL(chatGPTURL) { accepted in
+                    if !accepted {
+                        DispatchQueue.main.async {
+                            showPromptFailure(
+                                "The proofreading prompt was copied, but ChatGPT couldn’t be opened. You can open ChatGPT manually and paste it."
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 

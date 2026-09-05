@@ -90,7 +90,7 @@ struct PracticeHubView: View {
         ).count
 
         return NavigationLink {
-            StarredTermsView(
+            StarredTermsChooserView(
                 course: corpus.course,
                 phrases: corpus.entries,
                 lemmas: lemmaPool
@@ -563,6 +563,796 @@ struct PracticeHubView: View {
     }
 }
 
+private struct StarredTermsChooserView: View {
+    let course: LanguageCourse
+    let phrases: [PhraseEntry]
+    let lemmas: [Lemma]
+
+    @EnvironmentObject private var stars: StarStore
+
+    private var starredPhrases: [PhraseEntry] {
+        stars.starredPhrases(
+            course: course,
+            from: phrases
+        )
+    }
+
+    private var starredLemmas: [Lemma] {
+        stars.starredLemmas(
+            course: course,
+            from: lemmas
+        )
+    }
+
+    private var studyCount: Int {
+        starredPhrases.count + starredLemmas.count
+    }
+
+    private var accent: Color {
+        course == .french
+            ? Color.lingoBlue
+            : Color.lingoGreen
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("STARRED TERMS")
+                        .font(.custom("Fredoka-SemiBold", size: 13))
+                        .tracking(1.1)
+                        .foregroundStyle(Color.lingoMuted)
+
+                    Text("What do you want to do?")
+                        .font(.custom("Fredoka-Medium", size: 24))
+                        .foregroundStyle(Color.lingoInk)
+
+                    Text(
+                        "\(studyCount) starred item\(studyCount == 1 ? "" : "s") ready to study"
+                    )
+                    .font(.custom("Fredoka-Regular", size: 15))
+                    .foregroundStyle(Color.lingoMuted)
+                }
+
+                NavigationLink {
+                    StarredTermStudyView(
+                        course: course,
+                        phrases: phrases,
+                        lemmas: lemmas
+                    )
+                } label: {
+                    optionCard(
+                        title: "Study terms",
+                        subtitle: "Practise starred phrases, lemmas and chunks",
+                        systemImage: "square.and.pencil",
+                        tint: accent
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(studyCount == 0)
+                .opacity(studyCount == 0 ? 0.5 : 1)
+
+                NavigationLink {
+                    StarredTermsView(
+                        course: course,
+                        phrases: phrases,
+                        lemmas: lemmas
+                    )
+                } label: {
+                    optionCard(
+                        title: "See terms",
+                        subtitle: "Browse everything you've starred",
+                        systemImage: "star.fill",
+                        tint: Color.lingoGold
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Starred terms")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func optionCard(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        tint: Color
+    ) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: systemImage)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(tint)
+                .frame(width: 54, height: 54)
+                .background(tint.opacity(0.13))
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: 15,
+                        style: .continuous
+                    )
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.custom("Fredoka-Medium", size: 19))
+                    .foregroundStyle(Color.lingoInk)
+
+                Text(subtitle)
+                    .font(.custom("Fredoka-Regular", size: 15))
+                    .foregroundStyle(Color.lingoMuted)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .foregroundStyle(Color.lingoMuted)
+        }
+        .padding(16)
+        .background(Color.white)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
+            )
+            .stroke(Color.lingoLine, lineWidth: 2)
+        }
+    }
+}
+
+private enum StarredTermStudyKind {
+    case cloze
+    case fullPhrase
+}
+
+private struct StarredTermStudyItem: Identifiable {
+    let id: String
+    let kind: StarredTermStudyKind
+    let phrase: PhraseEntry
+    let answer: String
+    let cloze: String?
+    let hintCloze: String?
+}
+
+private struct StarredTermStudyView: View {
+    let course: LanguageCourse
+    let phrases: [PhraseEntry]
+    let lemmas: [Lemma]
+
+    @EnvironmentObject private var stars: StarStore
+
+    @State private var items: [StarredTermStudyItem] = []
+    @State private var index = 0
+    @State private var typedAnswer = ""
+    @State private var result: Bool?
+    @State private var correctCount = 0
+    @State private var hasLoaded = false
+    @State private var showHint = false
+
+    @FocusState private var answerFocused: Bool
+
+    private var current: StarredTermStudyItem? {
+        items.indices.contains(index)
+            ? items[index]
+            : nil
+    }
+
+    private var accent: Color {
+        course == .french
+            ? Color.lingoBlue
+            : Color.lingoGreen
+    }
+
+    var body: some View {
+        Group {
+            if !hasLoaded {
+                ProgressView()
+            } else if items.isEmpty {
+                ContentUnavailableView(
+                    "No study terms",
+                    systemImage: "star.slash",
+                    description: Text(
+                        "Star a phrase, lemma or chunk first."
+                    )
+                )
+            } else if let current {
+                questionView(current)
+            } else {
+                doneView
+            }
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Study terms")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if !hasLoaded {
+                startStudy()
+            }
+        }
+    }
+
+    private func questionView(
+        _ item: StarredTermStudyItem
+    ) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    Text("\(index + 1) / \(items.count)")
+                        .font(.custom("Fredoka-Regular", size: 14))
+                        .foregroundStyle(Color.lingoMuted)
+
+                    Spacer()
+
+                    if item.kind == .cloze {
+                        Button {
+                            showHint = true
+                        } label: {
+                            Image(
+                                systemName: "questionmark.circle.fill"
+                            )
+                            .font(.system(size: 24))
+                            .foregroundStyle(Color.lingoBlue)
+                            .frame(width: 40, height: 40)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(showHint)
+                        .opacity(showHint ? 0.45 : 1)
+                        .accessibilityLabel(
+                            "Show first-letter hint"
+                        )
+                    }
+
+                    Text(
+                        item.kind == .cloze
+                            ? "STARRED TERM"
+                            : "STARRED PHRASE"
+                    )
+                    .font(.custom("Fredoka-SemiBold", size: 12))
+                    .tracking(0.8)
+                    .foregroundStyle(Color.lingoGold)
+                }
+
+                VStack(spacing: 12) {
+                    Text(
+                        item.kind == .cloze
+                            ? "FILL IN THE GAP"
+                            : "WRITE THIS IN \(course.title.uppercased())"
+                    )
+                    .font(.custom("Fredoka-SemiBold", size: 12))
+                    .tracking(1)
+                    .foregroundStyle(Color.lingoMuted)
+
+                    if item.kind == .cloze {
+                        Text(
+                            showHint
+                                ? (
+                                    item.hintCloze
+                                        ?? item.cloze
+                                        ?? ""
+                                )
+                                : (item.cloze ?? "")
+                        )
+                            .font(
+                                course == .arabic
+                                    ? .custom(
+                                        "NotoSansArabic-Regular",
+                                        size: 22
+                                    )
+                                    : .custom(
+                                        "Fredoka-Medium",
+                                        size: 21
+                                    )
+                            )
+                            .foregroundStyle(Color.lingoInk)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(
+                                horizontal: false,
+                                vertical: true
+                            )
+
+                        Divider()
+
+                        Text(item.phrase.english)
+                            .font(.custom("Fredoka-Regular", size: 16))
+                            .foregroundStyle(Color.lingoMuted)
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text(item.phrase.english)
+                            .font(.custom("Fredoka-Medium", size: 22))
+                            .foregroundStyle(Color.lingoInk)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(
+                                horizontal: false,
+                                vertical: true
+                            )
+                    }
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity)
+                .background(Color.white)
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: 18,
+                        style: .continuous
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: 18,
+                        style: .continuous
+                    )
+                    .stroke(Color.lingoLine, lineWidth: 2)
+                }
+
+                TextField(
+                    item.kind == .cloze
+                        ? "Write the missing term"
+                        : "Write the whole answer",
+                    text: $typedAnswer
+                )
+                .font(.custom("Fredoka-Regular", size: 18))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($answerFocused)
+                .disabled(result != nil)
+                .padding(16)
+                .background(Color.white)
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: 16,
+                        style: .continuous
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: 16,
+                        style: .continuous
+                    )
+                    .stroke(
+                        result == nil
+                            ? Color.lingoLine
+                            : (
+                                result == true
+                                    ? Color.lingoCorrect
+                                    : Color.lingoWrong
+                            ),
+                        lineWidth: result == nil ? 2 : 3
+                    )
+                }
+                .onSubmit {
+                    if result == nil,
+                       !typedAnswer
+                        .trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        )
+                        .isEmpty {
+                        checkAnswer(item)
+                    }
+                }
+
+                if let result {
+                    VStack(
+                        alignment: .leading,
+                        spacing: 5
+                    ) {
+                        Label(
+                            result
+                                ? "Correct"
+                                : "Not quite",
+                            systemImage: result
+                                ? "checkmark.circle.fill"
+                                : "xmark.circle.fill"
+                        )
+                        .font(.custom("Fredoka-Medium", size: 17))
+                        .foregroundStyle(
+                            result
+                                ? Color.lingoCorrect
+                                : Color.lingoWrong
+                        )
+
+                        if !result {
+                            Text("Answer: \(item.answer)")
+                                .font(
+                                    .custom(
+                                        "Fredoka-Regular",
+                                        size: 16
+                                    )
+                                )
+                                .foregroundStyle(Color.lingoInk)
+                        }
+                    }
+                    .padding(16)
+                    .frame(
+                        maxWidth: .infinity,
+                        alignment: .leading
+                    )
+                    .background(
+                        (
+                            result
+                                ? Color.lingoCorrect
+                                : Color.lingoWrong
+                        )
+                        .opacity(0.10)
+                    )
+                    .clipShape(
+                        RoundedRectangle(
+                            cornerRadius: 16,
+                            style: .continuous
+                        )
+                    )
+                }
+
+                Button(
+                    result == nil
+                        ? "CHECK"
+                        : (
+                            index + 1 == items.count
+                                ? "FINISH"
+                                : "NEXT"
+                        )
+                ) {
+                    if result == nil {
+                        checkAnswer(item)
+                    } else {
+                        advance()
+                    }
+                }
+                .font(.custom("Fredoka-Medium", size: 17))
+                .buttonStyle(
+                    DuoButtonStyle(
+                        fill: result == true
+                            ? Color.lingoCorrect
+                            : accent,
+                        shadow: (
+                            result == true
+                                ? Color.lingoCorrect
+                                : accent
+                        )
+                        .opacity(0.68)
+                    )
+                )
+                .disabled(
+                    result == nil
+                        && typedAnswer
+                            .trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            )
+                            .isEmpty
+                )
+            }
+            .padding(20)
+        }
+    }
+
+    private var doneView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "star.circle.fill")
+                .font(.system(size: 58))
+                .foregroundStyle(Color.lingoGold)
+
+            Text("Starred terms complete!")
+                .font(.custom("Fredoka-Medium", size: 27))
+                .foregroundStyle(Color.lingoInk)
+
+            Text("\(correctCount) / \(items.count) correct")
+                .font(.custom("Fredoka-Regular", size: 17))
+                .foregroundStyle(Color.lingoMuted)
+
+            Button("STUDY AGAIN") {
+                startStudy()
+            }
+            .font(.custom("Fredoka-Medium", size: 17))
+            .buttonStyle(
+                DuoButtonStyle(
+                    fill: accent,
+                    shadow: accent.opacity(0.68)
+                )
+            )
+        }
+        .padding(24)
+    }
+
+    private func checkAnswer(
+        _ item: StarredTermStudyItem
+    ) {
+        let correct: Bool
+
+        switch item.kind {
+        case .cloze:
+            let entered = PracticeTextNormalizer.key(
+                typedAnswer
+            )
+
+            let expected = PracticeTextNormalizer.key(
+                item.answer
+            )
+
+            correct =
+                !entered.isEmpty
+                && entered == expected
+
+        case .fullPhrase:
+            correct = QuizViewModel.answersMatch(
+                typedAnswer,
+                item.answer
+            )
+        }
+
+        result = correct
+
+        if correct {
+            correctCount += 1
+        }
+
+        answerFocused = false
+    }
+
+    private func advance() {
+        index += 1
+        typedAnswer = ""
+        result = nil
+        showHint = false
+
+        if index < items.count {
+            DispatchQueue.main.async {
+                answerFocused = true
+            }
+        }
+    }
+
+    private func startStudy() {
+        let starredLemmas = stars.starredLemmas(
+            course: course,
+            from: lemmas
+        )
+
+        let starredPhrases = stars.starredPhrases(
+            course: course,
+            from: phrases
+        )
+
+        var next: [StarredTermStudyItem] = []
+
+        for lemma in starredLemmas {
+            let starKey = StarStore.lemmaKey(
+                course: course,
+                lemma: lemma
+            )
+
+            let candidates = phrases.compactMap {
+                phrase -> (PhraseEntry, String, String)? in
+
+                let containsTerm =
+                    phrase.lemmas.contains {
+                        StarStore.lemmaKey(
+                            course: course,
+                            lemma: $0
+                        ) == starKey
+                    }
+
+                guard containsTerm,
+                      let cloze = Self.makeCloze(
+                        sentence: phrase.foreign,
+                        term: lemma.foreign,
+                        revealInitials: false
+                      ),
+                      let hintCloze = Self.makeCloze(
+                        sentence: phrase.foreign,
+                        term: lemma.foreign,
+                        revealInitials: true
+                      ) else {
+                    return nil
+                }
+
+                return (
+                    phrase,
+                    cloze,
+                    hintCloze
+                )
+            }
+
+            let contextualCandidates =
+                candidates.filter {
+                    !Self.isWholeSentenceTerm(
+                        sentence: $0.0.foreign,
+                        term: lemma.foreign
+                    )
+                }
+
+            let preferredCandidates =
+                contextualCandidates.isEmpty
+                    ? candidates
+                    : contextualCandidates
+
+            guard let chosen =
+                    preferredCandidates.randomElement()
+            else {
+                continue
+            }
+
+            next.append(
+                StarredTermStudyItem(
+                    id: starKey,
+                    kind: .cloze,
+                    phrase: chosen.0,
+                    answer: lemma.foreign,
+                    cloze: chosen.1,
+                    hintCloze: chosen.2
+                )
+            )
+        }
+
+        for phrase in starredPhrases {
+            next.append(
+                StarredTermStudyItem(
+                    id: StarStore.phraseKey(
+                        course: course,
+                        phrase: phrase
+                    ),
+                    kind: .fullPhrase,
+                    phrase: phrase,
+                    answer: phrase.foreign,
+                    cloze: nil,
+                    hintCloze: nil
+                )
+            )
+        }
+
+        items = next.shuffled()
+        index = 0
+        typedAnswer = ""
+        result = nil
+        correctCount = 0
+        showHint = false
+        hasLoaded = true
+
+        if !items.isEmpty {
+            DispatchQueue.main.async {
+                answerFocused = true
+            }
+        }
+    }
+
+    private static func makeCloze(
+        sentence: String,
+        term: String,
+        revealInitials: Bool
+    ) -> String? {
+        let trimmedTerm =
+            term.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+
+        guard !trimmedTerm.isEmpty else {
+            return nil
+        }
+
+        let searchableSentence =
+            sentence.replacingOccurrences(
+                of: "’",
+                with: "'"
+            )
+
+        let searchableTerm =
+            trimmedTerm.replacingOccurrences(
+                of: "’",
+                with: "'"
+            )
+
+        guard let range =
+                searchableSentence.range(
+                    of: searchableTerm,
+                    options: [
+                        .caseInsensitive,
+                        .diacriticInsensitive
+                    ]
+                )
+        else {
+            return nil
+        }
+
+        let lowerOffset =
+            searchableSentence.distance(
+                from: searchableSentence.startIndex,
+                to: range.lowerBound
+            )
+
+        let upperOffset =
+            searchableSentence.distance(
+                from: searchableSentence.startIndex,
+                to: range.upperBound
+            )
+
+        guard let lower =
+                sentence.index(
+                    sentence.startIndex,
+                    offsetBy: lowerOffset,
+                    limitedBy: sentence.endIndex
+                ),
+              let upper =
+                sentence.index(
+                    sentence.startIndex,
+                    offsetBy: upperOffset,
+                    limitedBy: sentence.endIndex
+                )
+        else {
+            return nil
+        }
+
+        let originalTerm =
+            String(sentence[lower..<upper])
+
+        let maskedTerm =
+            Self.maskedTerm(
+                originalTerm,
+                revealInitials: revealInitials
+            )
+
+        return String(sentence[..<lower])
+            + maskedTerm
+            + String(sentence[upper...])
+    }
+
+    private static func maskedTerm(
+        _ term: String,
+        revealInitials: Bool
+    ) -> String {
+        var result = ""
+        var atWordStart = true
+
+        for character in term {
+            if character.isLetter
+                || character.isNumber {
+
+                if revealInitials && atWordStart {
+                    result.append(character)
+                } else {
+                    result.append("_")
+                }
+
+                atWordStart = false
+            } else {
+                result.append(character)
+                atWordStart = true
+            }
+        }
+
+        return result
+    }
+
+    private static func isWholeSentenceTerm(
+        sentence: String,
+        term: String
+    ) -> Bool {
+        comparableStudyText(sentence)
+            == comparableStudyText(term)
+    }
+
+    private static func comparableStudyText(
+        _ text: String
+    ) -> String {
+        let folded = text
+            .lowercased()
+            .folding(
+                options: .diacriticInsensitive,
+                locale: .current
+            )
+
+        return String(
+            folded.filter {
+                $0.isLetter || $0.isNumber
+            }
+        )
+    }
+}
+
 private struct StarredTermsView: View {
     let course: LanguageCourse
     let phrases: [PhraseEntry]
@@ -898,6 +1688,8 @@ private struct LemmaPairCard: Identifiable, Hashable {
 }
 
 private struct LemmaPairsView: View {
+    @EnvironmentObject private var stars: StarStore
+
     let course: LanguageCourse
     let lemmas: [Lemma]
     let hapticsEnabled: Bool
@@ -912,6 +1704,7 @@ private struct LemmaPairsView: View {
     @State private var moves = 0
     @State private var elapsedSeconds = 0
     @State private var isFinished = false
+    @State private var showCompletionCard = false
     @State private var runID = UUID()
     @State private var didReportRun = false
 
@@ -971,8 +1764,18 @@ private struct LemmaPairsView: View {
                 }
             }
 
-            if isFinished {
+            if isFinished && showCompletionCard {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        showCompletionCard = false
+                    }
+
                 completionCard
+                    .onTapGesture {
+                        // Swallow taps inside the completion card.
+                    }
             }
         }
         .navigationTitle("Pairs")
@@ -1095,8 +1898,8 @@ private struct LemmaPairsView: View {
             .easeInOut(duration: 0.24),
             value: isFaceUp
         )
-        .opacity(isMatched ? 0.16 : 1)
-        .scaleEffect(isMatched ? 0.94 : 1)
+        .opacity(isMatched && !isFinished ? 0.16 : 1)
+        .scaleEffect(isMatched && !isFinished ? 0.94 : 1)
         .animation(
             .easeOut(duration: 0.24),
             value: isMatched
@@ -1111,7 +1914,7 @@ private struct LemmaPairsView: View {
             handleTap(card)
         }
         .allowsHitTesting(
-            !isMatched && !isResolving
+            isFinished || (!isMatched && !isResolving)
         )
     }
 
@@ -1136,15 +1939,11 @@ private struct LemmaPairsView: View {
 
                 Spacer()
 
-                StarButton(
-                    course: course,
-                    lemma: card.lemma
-                )
-                .scaleEffect(0.72)
-                .frame(
-                    width: 29,
-                    height: 29
-                )
+                pairStarButton(for: card.lemma)
+                    .frame(
+                        width: 29,
+                        height: 29
+                    )
             }
 
             Spacer(minLength: 0)
@@ -1210,6 +2009,34 @@ private struct LemmaPairsView: View {
             color: .black.opacity(0.06),
             radius: 0,
             y: 3
+        )
+    }
+
+    private func pairStarButton(for lemma: Lemma) -> some View {
+        let key = StarStore.lemmaKey(
+            course: course,
+            lemma: lemma
+        )
+        let isStarred = stars.isStarred(key)
+
+        return Button {
+            stars.toggle(key)
+        } label: {
+            Image(
+                systemName: isStarred
+                    ? "star.fill"
+                    : "star"
+            )
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(Color.lingoGold)
+            .frame(width: 29, height: 29)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            isStarred
+                ? "Remove star"
+                : "Star term"
         )
     }
 
@@ -1405,6 +2232,7 @@ private struct LemmaPairsView: View {
         moves = 0
         elapsedSeconds = 0
         isFinished = false
+        showCompletionCard = false
         didReportRun = false
         runID = UUID()
     }
@@ -1512,6 +2340,7 @@ private struct LemmaPairsView: View {
 
     private func finishRound() {
         isFinished = true
+        showCompletionCard = true
 
         guard !didReportRun else {
             return
@@ -2489,6 +3318,11 @@ private struct HeadphoneSpeakingPracticeView: View {
               let current,
               recognizer.isRecording else { return }
 
+        if PracticeTextNormalizer.sameSpokenSentence(raw, current.foreign) {
+            finishCurrentCorrectly()
+            return
+        }
+
         if course == .arabic,
            QuizViewModel.answersMatch(raw, current.foreign) {
             finishCurrentCorrectly()
@@ -3370,6 +4204,20 @@ private enum PracticeTextNormalizer {
     static func cleanWordForSpeech(_ text: String) -> String {
         stripOptionalAgreementNotation(text)
             .trimmingCharacters(in: .punctuationCharacters.union(.symbols).union(.whitespacesAndNewlines))
+    }
+
+    static func sameSpokenSentence(_ lhs: String, _ rhs: String) -> Bool {
+        let left = spokenSentenceKey(lhs)
+        let right = spokenSentenceKey(rhs)
+        return !left.isEmpty && left == right
+    }
+
+    private static func spokenSentenceKey(_ text: String) -> String {
+        let folded = text
+            .lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current)
+
+        return String(folded.filter { $0.isLetter || $0.isNumber })
     }
 
     static func alignedTokens(_ sentence: String, course: LanguageCourse) -> [String] {
